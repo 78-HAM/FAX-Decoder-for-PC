@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   check:
-    name: Syntax + Import + Runtime Check
+    name: Syntax Import Runtime Check
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -57,7 +57,7 @@ jobs:
                   sys.exit(1)
           EOF
 
-      - name: Runtime init check (xvfb)
+      - name: Runtime init check
         run: |
           xvfb-run -a python << 'EOF'
           import sys, importlib.util, traceback
@@ -85,7 +85,7 @@ jobs:
               sys.exit(1)
           EOF
 
-      - name: Simulate menu and setup interactions
+      - name: Simulate menu interactions
         run: |
           xvfb-run -a python << 'EOF'
           import sys, importlib.util, traceback
@@ -133,14 +133,14 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            target: windows-x64
-            artifact: FAXDecoder-windows-x64.exe
-            python_arch: x64
-
-          - os: windows-latest
             target: windows-x86
             artifact: FAXDecoder-windows-x86.exe
             python_arch: x86
+
+          - os: windows-latest
+            target: windows-x64
+            artifact: FAXDecoder-windows-x64.exe
+            python_arch: x64
 
           - os: ubuntu-22.04
             target: linux-x64
@@ -151,6 +151,11 @@ jobs:
             target: linux-arm64
             artifact: FAXDecoder-linux-arm64
             python_arch: arm64
+
+          - os: macos-15-intel
+            target: macos-x64
+            artifact: FAXDecoder-macos-x64
+            python_arch: x64
 
           - os: macos-14
             target: macos-arm64
