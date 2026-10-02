@@ -14,7 +14,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Windows
           - os: windows-latest
             target: windows-x64
             artifact: FAXDecoder-windows-x64.exe
@@ -25,7 +24,6 @@ jobs:
             artifact: FAXDecoder-windows-x86.exe
             python_arch: x86
 
-          # Linux
           - os: ubuntu-22.04
             target: linux-x64
             artifact: FAXDecoder-linux-x64
@@ -36,7 +34,6 @@ jobs:
             artifact: FAXDecoder-linux-arm64
             python_arch: arm64
 
-          # macOS (仅 ARM64)
           - os: macos-14
             target: macos-arm64
             artifact: FAXDecoder-macos-arm64
@@ -137,12 +134,20 @@ jobs:
           if-no-files-found: error
 
   release:
-    name: Release
+    name: Release to latest tag
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      # 获取当前仓库的最新 tag 名称
+      - name: Find latest tag
+        id: latest_tag
+        uses: oprypin/find-latest-tag@v1
+        with:
+          repository: ${{ github.repository }}
+          releases-only: false
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -154,13 +159,15 @@ jobs:
           find artifacts -type f -exec cp {} release/ \;
           ls -lh release/
 
+      # 发到最新 tag。softprops/action-gh-release 会自动创建不存在的 tag
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "1.0.0"
-          name: "FAX Decoder 1.0.0"
+          tag_name: ${{ steps.latest_tag.outputs.tag }}
+          name: "FAX Decoder ${{ steps.latest_tag.outputs.tag }}"
           draft: false
           prerelease: false
+          make_latest: true
           files: release/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
