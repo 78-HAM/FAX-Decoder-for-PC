@@ -25,13 +25,6 @@ jobs:
             artifact: FAXDecoder-windows-x86.exe
             python_arch: x86
 
-          # Windows 兼容旧系统版本（Python 3.8，支持 Win7 SP1+）
-          - os: windows-2019
-            target: windows-x64-legacy
-            artifact: FAXDecoder-windows-x64-legacy.exe
-            python_arch: x64
-            python_version: '3.8'
-
           # Linux
           - os: ubuntu-22.04
             target: linux-x64
@@ -56,7 +49,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python_version || '3.11' }}
+          python-version: '3.11'
           architecture: ${{ matrix.python_arch }}
 
       - name: Install dependencies (Linux)
