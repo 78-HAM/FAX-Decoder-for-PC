@@ -2,10 +2,14 @@ import os
 import shutil
 import tempfile
 import threading
+import webbrowser
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, Menu
 from datetime import datetime
 import wave
+import urllib.request
+import json
+import re
 
 import numpy as np
 import pyaudio
@@ -20,6 +24,12 @@ F_MIN = 1500.0
 F_MAX = 2300.0
 TARGET_SAMPLE_RATE = 60000
 CHUNK_SIZE = 1024
+
+APP_VERSION = "1.0.1"
+APP_AUTHOR = "MC_blone"
+GITHUB_RELEASES_API = "https://api.github.com/repos/78-HAM/FAX-Decoder-for-PC/releases"
+GITHUB_TAGS_API = "https://api.github.com/repos/78-HAM/FAX-Decoder-for-PC/tags"
+GITHUB_RELEASES_PAGE = "https://github.com/78-HAM/FAX-Decoder-for-PC/releases"
 
 
 class Resampler:
@@ -80,14 +90,21 @@ def apply_transform_to_snapshot(snapshot, skew, offset, offset_scale=1.0):
     src_x = ((src_x % w) + w) % w
     x1 = src_x.astype(np.int64)
     x2 = (x1 + 1) % w
-    frac = src_x - x1
-    sf = np.clip((frac - 0.5) * 0.5 + 0.5, 0.0, 1.0)
+    frac = np.clip(src_x - x1, 0.0, 1.0)
     src_f = snapshot.astype(np.float32)
     row_idx = np.arange(h)[:, None]
     a = src_f[row_idx, x1]
     b = src_f[row_idx, x2]
-    out = a * (1.0 - sf) + b * sf
+    out = a * (1.0 - frac) + b * frac
     return np.clip(out, 0.0, 255.0).astype(np.uint8)
+
+
+def parse_version(v):
+    try:
+        parts = re.findall(r"\d+", str(v))
+        return tuple(int(p) for p in parts) if parts else (0,)
+    except Exception:
+        return (0,)
 
 
 class FaxDecoderApp:
@@ -129,6 +146,8 @@ class FaxDecoderApp:
         self.calib_start_x = 500
         self.calib_split_y = 400
 
+        self.active_calib_window = None
+
         self.latest_fft_data = np.zeros(FFT_SIZE // 2, dtype=np.float32)
         self.display_fft_data = np.zeros(FFT_SIZE // 2, dtype=np.float32)
 
@@ -145,6 +164,13 @@ class FaxDecoderApp:
         self._tk_image = None
         self.image_dirty = True
 
+        self.file_pick_index = None
+        self.file_decode_index = None
+
+        self.data_lock = threading.Lock()
+        self._closing = False
+        self.file_decode_thread = None
+
         self.setup_ui()
         self.update_image_loop()
         self.update_spectrum_loop()
@@ -158,25 +184,33 @@ class FaxDecoderApp:
         menubar = Menu(self.root)
 
         file_menu = Menu(menubar, tearoff=0)
+        self.file_pick_index = file_menu.index("end") + 1
         file_menu.add_command(label="选择音频文件…", command=self.pick_audio_file)
+        self.file_decode_index = file_menu.index("end") + 1
         file_menu.add_command(label="开始文件解码", command=self.start_file_decoding)
         file_menu.add_separator()
         file_menu.add_command(label="保存图像…", command=self.save_image)
         file_menu.add_separator()
         file_menu.add_command(label="退出", command=self.on_close)
         menubar.add_cascade(label="文件", menu=file_menu)
+        self.file_menu = file_menu
 
         settings_menu = Menu(menubar, tearoff=0)
         settings_menu.add_command(label="设置频谱衰减速度", command=self.input_spectrum_decay)
         settings_menu.add_command(label="设置图像宽度", command=self.input_custom_width)
         settings_menu.add_command(label="设置对比度", command=self.show_contrast_dialog)
         settings_menu.add_separator()
+        self.menu_skew_index = settings_menu.index("end") + 1
         settings_menu.add_command(label="校准歪斜 (全局)", command=self.start_skew_calibration)
+        self.menu_start_index = settings_menu.index("end") + 1
         settings_menu.add_command(label="设置起点 (全局)", command=self.start_start_point_calibration)
+        self.menu_rpm_index = settings_menu.index("end") + 1
         settings_menu.add_command(label="选择转速", command=self.show_rpm_menu)
         settings_menu.add_separator()
+        self.menu_manual_index = settings_menu.index("end") + 1
         settings_menu.add_command(label="手动纠正", command=self.show_manual_menu)
         menubar.add_cascade(label="设置", menu=settings_menu)
+        self.settings_menu = settings_menu
 
         drivers_menu = Menu(menubar, tearoff=0)
         drivers_menu.add_command(label="重置", command=self.reset_audio_device)
@@ -186,6 +220,11 @@ class FaxDecoderApp:
         record_menu = Menu(menubar, tearoff=0)
         record_menu.add_command(label="打开录制面板", command=self.open_record_window)
         menubar.add_cascade(label="录制", menu=record_menu)
+
+        about_menu = Menu(menubar, tearoff=0)
+        about_menu.add_command(label="关于", command=self.show_about)
+        about_menu.add_command(label="检查更新", command=self.check_update)
+        menubar.add_cascade(label="关于", menu=about_menu)
 
         self.root.config(menu=menubar)
 
@@ -259,7 +298,179 @@ class FaxDecoderApp:
         self.image_canvas.bind("<Configure>", lambda e: self.mark_image_dirty())
 
     def set_status(self, text):
-        self.status_label.config(text=text)
+        if self._closing:
+            return
+        try:
+            self.status_label.config(text=text)
+        except Exception:
+            pass
+
+    def _set_calib_menu_state(self, state):
+        for idx in (self.menu_skew_index, self.menu_start_index,
+                    self.menu_rpm_index, self.menu_manual_index):
+            try:
+                self.settings_menu.entryconfig(idx, state=state)
+            except Exception:
+                pass
+
+    def _set_file_menu_state(self, state):
+        for idx in (self.file_pick_index, self.file_decode_index):
+            if idx is None:
+                continue
+            try:
+                self.file_menu.entryconfig(idx, state=state)
+            except Exception:
+                pass
+
+    def _set_top_buttons_state(self, state):
+        for btn in (self.btn_start, self.btn_clear):
+            try:
+                btn.config(state=state)
+            except Exception:
+                pass
+
+    def lock_calib_menus(self):
+        self._set_calib_menu_state("disabled")
+        self._set_file_menu_state("disabled")
+        self._set_top_buttons_state("disabled")
+
+    def unlock_calib_menus(self):
+        self._set_calib_menu_state("normal")
+        self._set_file_menu_state("normal")
+        self._set_top_buttons_state("normal")
+
+    def _set_manual_menu_state(self, state):
+        try:
+            self.settings_menu.entryconfig(self.menu_manual_index, state=state)
+        except Exception:
+            pass
+
+    def show_about(self):
+        dlg = tk.Toplevel(self.root)
+        dlg.title("关于")
+        dlg.geometry("360x220")
+        dlg.transient(self.root)
+        dlg.grab_set()
+        dlg.configure(bg="gray25")
+        dlg.resizable(False, False)
+
+        tk.Label(dlg, text="FAX Decoder for PC", bg="gray25", fg="white",
+                 font=("Arial", 14, "bold")).pack(pady=(20, 6))
+        tk.Label(dlg, text=f"作者：{APP_AUTHOR}", bg="gray25", fg="#FFEB3B",
+                 font=("Arial", 11)).pack(pady=4)
+        tk.Label(dlg, text=f"当前版本：{APP_VERSION}", bg="gray25", fg="lightgray",
+                 font=("Arial", 11)).pack(pady=4)
+        tk.Label(dlg, text="https://github.com/78-HAM/FAX-Decoder-for-PC",
+                 bg="gray25", fg="#4FC3F7", font=("Arial", 9)).pack(pady=(8, 4))
+
+        tk.Button(dlg, text="确定", width=12, command=dlg.destroy,
+                  bg="#546E7A", fg="white").pack(pady=12)
+
+    def check_update(self):
+        def fetch_json(url):
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 FAX-Decoder-Updater",
+                    "Accept": "application/vnd.github+json",
+                    "Cache-Control": "no-cache",
+                }
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+
+        def worker():
+            latest_version = None
+            latest_url = GITHUB_RELEASES_PAGE
+            any_success = False
+
+            try:
+                releases = fetch_json(GITHUB_RELEASES_API)
+                any_success = True
+                if isinstance(releases, list):
+                    for rel in releases:
+                        tag = (rel.get("tag_name") or "").strip()
+                        if not tag:
+                            tag = (rel.get("name") or "").strip()
+                        if not tag:
+                            continue
+                        if latest_version is None or parse_version(tag) > parse_version(latest_version):
+                            latest_version = tag
+                            latest_url = rel.get("html_url", GITHUB_RELEASES_PAGE)
+            except Exception:
+                pass
+
+            if latest_version is None:
+                try:
+                    tags = fetch_json(GITHUB_TAGS_API)
+                    any_success = True
+                    if isinstance(tags, list):
+                        for t in tags:
+                            name = (t.get("name") or "").strip()
+                            if not name:
+                                continue
+                            if latest_version is None or parse_version(name) > parse_version(latest_version):
+                                latest_version = name
+                                latest_url = f"{GITHUB_RELEASES_PAGE}/tag/{name}"
+                except Exception:
+                    pass
+
+            if self._closing:
+                return
+
+            if not any_success or latest_version is None:
+                self.root.after(0, lambda: messagebox.showerror(
+                    "检查更新", "检查失败，请检查网络连接"))
+                return
+
+            cur = parse_version(APP_VERSION)
+            new = parse_version(latest_version)
+
+            if new > cur:
+                def ask():
+                    if self._closing:
+                        return
+                    if messagebox.askyesno(
+                            "发现新版本",
+                            f"发现新版本 {latest_version}\n当前版本 {APP_VERSION}\n\n是否前往下载？"):
+                        webbrowser.open(latest_url)
+                self.root.after(0, ask)
+            else:
+                self.root.after(0, lambda: messagebox.showinfo(
+                    "检查更新", f"当前已是最新版本（{APP_VERSION}）"))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _experimental_warning(self, title, on_confirm):
+        dlg = tk.Toplevel(self.root)
+        dlg.title("实验性功能")
+        dlg.geometry("420x200")
+        dlg.transient(self.root)
+        dlg.grab_set()
+        dlg.configure(bg="gray25")
+        dlg.resizable(False, False)
+
+        tk.Label(dlg, text=title, bg="gray25", fg="#FF5252",
+                 font=("Arial", 13, "bold")).pack(pady=(18, 6))
+        tk.Label(dlg, text="这是一个实验性功能，可能不稳定。\n是否继续？",
+                 bg="gray25", fg="white", font=("Arial", 10),
+                 justify=tk.CENTER).pack(pady=6)
+
+        btn_row = tk.Frame(dlg, bg="gray25")
+        btn_row.pack(pady=16)
+
+        def confirm():
+            dlg.destroy()
+            self.root.after(60, on_confirm)
+
+        tk.Button(btn_row, text="取消", width=12,
+                  bg="#1565C0", fg="white",
+                  activebackground="#0D47A1", activeforeground="white",
+                  command=dlg.destroy).pack(side=tk.LEFT, padx=8)
+        tk.Button(btn_row, text="确定", width=12,
+                  bg="#757575", fg="white",
+                  activebackground="#616161", activeforeground="white",
+                  command=confirm).pack(side=tk.LEFT, padx=8)
 
     def reset_audio_device(self):
         self.selected_audio_device = None
@@ -326,17 +537,24 @@ class FaxDecoderApp:
         tk.Button(btnf, text="取消", width=10, command=dlg.destroy).pack(side=tk.LEFT, padx=4)
 
     def input_spectrum_decay(self):
-        v = simpledialog.askfloat("频谱衰减速度", "输入 0.1 ~ 0.99 之间的数值：",
-                                  initialvalue=self.spectrum_decay_rate, parent=self.root)
-        if v is not None and 0.05 < v < 1.0:
-            self.spectrum_decay_rate = v
-            self.set_status(f"频谱衰减速度：{v}")
+        def do_input():
+            v = simpledialog.askfloat("频谱衰减速度", "输入 0.1 ~ 0.99 之间的数值：",
+                                      initialvalue=self.spectrum_decay_rate, parent=self.root)
+            if v is not None and 0.05 < v < 1.0:
+                self.spectrum_decay_rate = v
+                self.set_status(f"频谱衰减速度：{v}")
+
+        self._experimental_warning("设置频谱衰减速度", do_input)
 
     def input_custom_width(self):
-        v = simpledialog.askinteger("设置图像宽度", "像素：", initialvalue=self.image_width, parent=self.root)
-        if v and v > 0:
-            self.image_width = v
-            self.reinit_bitmap()
+        def do_input():
+            v = simpledialog.askinteger("设置图像宽度", "像素：",
+                                        initialvalue=self.image_width, parent=self.root)
+            if v and v > 0:
+                self.image_width = v
+                self.reinit_bitmap()
+
+        self._experimental_warning("设置图像宽度", do_input)
 
     def show_contrast_dialog(self):
         dlg = tk.Toplevel(self.root)
@@ -405,10 +623,15 @@ class FaxDecoderApp:
         if self.current_line_index == 0:
             messagebox.showinfo("提示", "尚无图像数据")
             return
+        if self.active_calib_window is not None:
+            return
+
+        self.lock_calib_menus()
         self.is_in_manual_mode = False
         self.calib_state = "SKEW_P1"
         self.calib_p1 = (self.image_canvas.winfo_width() // 2, self.image_canvas.winfo_height() // 3)
         self.calib_p2 = self.calib_p1
+        self.active_calib_window = "skew"
         self.show_calib_bar("校准歪斜：拖动绿色十字选择第 1 点",
                             [("手动调整", lambda: self.open_fine_tune("skew")),
                              ("确定第 1 点", self._skew_next),
@@ -427,9 +650,14 @@ class FaxDecoderApp:
         if self.current_line_index == 0:
             messagebox.showinfo("提示", "尚无图像数据")
             return
+        if self.active_calib_window is not None:
+            return
+
+        self.lock_calib_menus()
         self.is_in_manual_mode = False
         self.calib_state = "START_POINT"
         self.calib_start_x = self.image_canvas.winfo_width() // 2
+        self.active_calib_window = "start"
         self.show_calib_bar("设置起点：拖动黄色竖线选择新起点位置",
                             [("手动调整", lambda: self.open_fine_tune("start")),
                              ("确定位置", self.apply_start_point_calibration),
@@ -438,8 +666,12 @@ class FaxDecoderApp:
     def exit_calibration(self):
         self.calib_state = "NONE"
         self.is_in_manual_mode = False
+        self.active_calib_window = None
         self.hide_calib_bar()
+        self.unlock_calib_menus()
+        self._set_manual_menu_state("disabled" if self.is_decoding else "normal")
         self.mark_image_dirty()
+        self.set_status("已退出校准")
 
     def apply_start_point_calibration(self):
         x_img = float((self.calib_start_x - self.img_display_x) / max(self.img_display_scale, 1e-6))
@@ -527,9 +759,8 @@ class FaxDecoderApp:
             src_x = ((src_x % w) + w) % w
             x1 = src_x.astype(np.int64) % w
             x2 = (x1 + 1) % w
-            frac = src_x - x1
-            sf = np.clip((frac - 0.5) * 0.5 + 0.5, 0.0, 1.0)
-            val = data[x1] * (1.0 - sf) + data[x2] * sf
+            frac = np.clip(src_x - x1, 0.0, 1.0)
+            val = data[x1] * (1.0 - frac) + data[x2] * frac
             arr[i] = np.clip(val * 255.0, 0.0, 255.0).astype(np.uint8)
 
         return arr, ratio
@@ -753,8 +984,16 @@ class FaxDecoderApp:
         if self.current_line_index == 0:
             messagebox.showinfo("提示", "尚无图像数据")
             return
+        if self.is_decoding:
+            messagebox.showwarning("提示", "手动纠正必须先在停止解码后才能进行")
+            return
+        if self.active_calib_window is not None and self.active_calib_window != "manual":
+            return
+
+        self.lock_calib_menus()
         self.is_in_manual_mode = True
         self.calib_state = "NONE"
+        self.active_calib_window = "manual"
         self.show_calib_bar("手动纠正：请选择操作步骤",
                             [("1. 设置分割线", self.start_split_line_selection),
                              ("2. 设置偏移", self.start_multi_start_calib),
@@ -824,11 +1063,12 @@ class FaxDecoderApp:
                 src_x = ((src_x % self.image_width) + self.image_width) % self.image_width
                 x1 = src_x.astype(np.int64)
                 x2 = (x1 + 1) % self.image_width
-                frac = src_x - x1
-                sf = (frac - 0.5) * 0.5 + 0.5
-                sf = np.clip(sf, 0, 1)
-                new_row = src_row[x1] * (1.0 - sf) + src_row[x2] * sf
+                frac = np.clip(src_x - x1, 0.0, 1.0)
+                new_row = src_row[x1] * (1.0 - frac) + src_row[x2] * frac
                 new_data.append(new_row)
+
+            if self._closing:
+                return
 
             self.processed_lines_data = new_data
             self.skew_factor = 0.0
@@ -837,7 +1077,8 @@ class FaxDecoderApp:
             self.temp_offset = 0.0
             self.sync_segments = [SyncSegment(0, 0.0, 0.0)]
             self.redraw_all_history()
-            self.root.after(0, lambda: messagebox.showinfo("完成", "手动校准已应用并固化"))
+            if not self._closing:
+                self.root.after(0, lambda: messagebox.showinfo("完成", "手动校准已应用并固化"))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -887,20 +1128,27 @@ class FaxDecoderApp:
         self.image_dirty = True
 
     def update_image_loop(self):
+        if self._closing:
+            return
         if self.image_dirty:
             self.image_dirty = False
             try:
                 self.redraw_image()
             except Exception as e:
                 print("redraw error:", e)
-        self.root.after(80, self.update_image_loop)
+        try:
+            self.root.after(80, self.update_image_loop)
+        except Exception:
+            pass
 
     def redraw_image(self):
         self.image_canvas.delete("all")
         if self.current_line_index == 0:
             return
 
-        img_data = self.image_array[:self.current_line_index, :]
+        with self.data_lock:
+            img_data = self.image_array[:self.current_line_index, :].copy()
+
         pil_img = Image.fromarray(img_data, mode="L")
 
         canvas_w = max(1, self.image_canvas.winfo_width())
@@ -968,11 +1216,16 @@ class FaxDecoderApp:
                 self.image_canvas.create_line(x, y, x, H, fill="yellow", width=2)
 
     def update_spectrum_loop(self):
+        if self._closing:
+            return
         try:
             self.render_spectrum()
         except Exception as e:
             print("spectrum err:", e)
-        self.root.after(33, self.update_spectrum_loop)
+        try:
+            self.root.after(33, self.update_spectrum_loop)
+        except Exception:
+            pass
 
     def render_spectrum(self):
         c = self.spectrum_canvas
@@ -1074,6 +1327,8 @@ class FaxDecoderApp:
         return SyncSegment(0, self.skew_factor, self.global_x_offset)
 
     def start_decoding(self):
+        if self._closing:
+            return
         if self.is_decoding:
             self.set_status("解码已在进行中")
             return
@@ -1097,6 +1352,7 @@ class FaxDecoderApp:
             return
 
         self.is_decoding = True
+        self._set_manual_menu_state("disabled")
         self.set_status("正在解码…")
         self.process_thread = threading.Thread(target=self.audio_loop, daemon=True)
         self.process_thread.start()
@@ -1105,22 +1361,31 @@ class FaxDecoderApp:
         if not self.is_decoding:
             return
         self.is_decoding = False
-        if self.process_thread is not None:
-            self.process_thread.join(timeout=1.5)
-            self.process_thread = None
+
         if self.audio_stream is not None:
             try:
                 self.audio_stream.stop_stream()
+            except Exception:
+                pass
+            try:
                 self.audio_stream.close()
             except Exception:
                 pass
             self.audio_stream = None
+
+        if self.process_thread is not None and self.process_thread.is_alive():
+            self.process_thread.join(timeout=2.0)
+        self.process_thread = None
+
         if self.pyaudio_instance is not None:
             try:
                 self.pyaudio_instance.terminate()
             except Exception:
                 pass
             self.pyaudio_instance = None
+
+        if self.active_calib_window is None and not self._closing:
+            self._set_manual_menu_state("normal")
         self.set_status("已停止")
 
     def audio_loop(self):
@@ -1135,7 +1400,7 @@ class FaxDecoderApp:
         fft_ring = np.zeros(FFT_SIZE, dtype=np.float32)
         fft_index = 0
 
-        while self.is_decoding and self.audio_stream is not None:
+        while self.is_decoding and not self._closing and self.audio_stream is not None:
             try:
                 data = self.audio_stream.read(CHUNK_SIZE, exception_on_overflow=False)
             except Exception as e:
@@ -1176,14 +1441,22 @@ class FaxDecoderApp:
                     acc_samples = 0
 
     def perform_line_demodulation(self, line_data, sr):
+        if self._closing:
+            return
         row = self.demodulate_fax(line_data, sr)
-        self.processed_lines_data.append(row)
-        seg = self.get_segment_for_line(self.current_line_index)
-        self.draw_one_line(row, self.current_line_index, seg.skew_factor, seg.global_x_offset)
-        self.current_line_index += 1
+        with self.data_lock:
+            if self._closing:
+                return
+            idx = self.current_line_index
+            if idx >= MAX_LINES:
+                return
+            self.processed_lines_data.append(row)
+            seg = self.get_segment_for_line(idx)
+            self.draw_one_line_locked(row, idx, seg.skew_factor, seg.global_x_offset)
+            self.current_line_index = idx + 1
 
-    def draw_one_line(self, data, row, skew, offset):
-        if row >= MAX_LINES:
+    def draw_one_line_locked(self, data, row, skew, offset):
+        if row < 0 or row >= MAX_LINES:
             return
         total_shift = row * skew + offset
         eff = ((total_shift % self.image_width) + self.image_width) % self.image_width
@@ -1193,11 +1466,9 @@ class FaxDecoderApp:
         src_x = ((src_x % self.image_width) + self.image_width) % self.image_width
         x1 = src_x.astype(np.int64)
         x2 = (x1 + 1) % self.image_width
-        frac = src_x - x1
-        sf = (frac - 0.5) * 0.5 + 0.5
-        sf = np.clip(sf, 0, 1)
+        frac = np.clip(src_x - x1, 0.0, 1.0)
 
-        val = data[x1] * (1.0 - sf) + data[x2] * sf
+        val = data[x1] * (1.0 - frac) + data[x2] * frac
         val = np.clip(val, 0.0, 1.0)
 
         if self.is_binary_mode:
@@ -1206,7 +1477,11 @@ class FaxDecoderApp:
             g = (val * 255.0).astype(np.uint8)
 
         self.image_array[row, :] = g
-        self.mark_image_dirty()
+        self.image_dirty = True
+
+    def draw_one_line(self, data, row, skew, offset):
+        with self.data_lock:
+            self.draw_one_line_locked(data, row, skew, offset)
 
     def pick_audio_file(self):
         path = filedialog.askopenfilename(
@@ -1221,29 +1496,60 @@ class FaxDecoderApp:
             self.set_status(f"已选文件：{os.path.basename(path)}")
 
     def start_file_decoding(self):
+        if self._closing:
+            return
         if not self.selected_file:
             messagebox.showinfo("提示", "请先选择音频文件")
             return
         if self.is_decoding:
             messagebox.showinfo("提示", "请先停止正在进行的解码")
             return
+        if self.file_decode_thread is not None and self.file_decode_thread.is_alive():
+            messagebox.showinfo("提示", "文件解码正在进行中")
+            return
+        if self.active_calib_window is not None:
+            messagebox.showwarning("提示", "请先退出当前校准")
+            return
+
         self.clear_all()
         path = self.selected_file
+        self.active_calib_window = "file"
+        self.lock_calib_menus()
         self.set_status("文件解码中…")
 
         def worker():
             try:
                 self.decode_audio_file(path)
+                if self._closing:
+                    return
                 self.root.after(0, lambda: messagebox.showinfo("完成", "文件解码完成"))
                 self.root.after(0, lambda: self.set_status("文件解码完成"))
             except Exception as e:
                 import traceback
                 traceback.print_exc()
+                if self._closing:
+                    return
                 err = str(e)
                 self.root.after(0, lambda: messagebox.showerror("解码失败", err))
                 self.root.after(0, lambda: self.set_status(f"解码失败：{err}"))
+            finally:
+                self.active_calib_window = None
+                if self._closing:
+                    return
 
-        threading.Thread(target=worker, daemon=True).start()
+                def _cleanup():
+                    if self._closing:
+                        return
+                    self.unlock_calib_menus()
+                    self._set_manual_menu_state("disabled" if self.is_decoding else "normal")
+
+                try:
+                    self.root.after(0, _cleanup)
+                except Exception:
+                    pass
+
+        self.file_decode_thread = threading.Thread(target=worker, daemon=True)
+        self.file_decode_thread.start()
 
     def _load_audio_samples(self, path):
         data, sr = sf.read(path, dtype="int16", always_2d=True)
@@ -1263,9 +1569,13 @@ class FaxDecoderApp:
         n_total = len(samples)
 
         for start in range(0, n_total, in_chunk):
+            if self._closing:
+                return
             seg = samples[start:start + in_chunk].astype(np.float32)
             resampler.put(seg)
             while True:
+                if self._closing:
+                    return
                 out = resampler.get_output(in_chunk * 2)
                 if len(out) == 0:
                     break
@@ -1282,12 +1592,14 @@ class FaxDecoderApp:
                         line_acc = np.zeros(target_len, dtype=np.float32)
                         acc_samples = 0
 
-        while True:
+        while not self._closing:
             out = resampler.get_output(in_chunk * 2)
             if len(out) == 0:
                 break
             i = 0
             while i < len(out):
+                if self._closing:
+                    return
                 space = target_len - acc_samples
                 take = min(space, len(out) - i)
                 line_acc[acc_samples:acc_samples + take] = out[i:i + take]
@@ -1301,24 +1613,32 @@ class FaxDecoderApp:
 
     def redraw_all_history(self):
         def worker():
-            copy = list(self.processed_lines_data)
+            with self.data_lock:
+                copy = list(self.processed_lines_data)
             for i, row in enumerate(copy):
+                if self._closing:
+                    return
                 seg = self.get_segment_for_line(i)
                 self.draw_one_line(row, i, seg.skew_factor, seg.global_x_offset)
-            self.current_line_index = len(copy)
+            with self.data_lock:
+                self.current_line_index = len(copy)
             self.mark_image_dirty()
         threading.Thread(target=worker, daemon=True).start()
 
     def redraw_preview_with_temp(self):
         def worker():
-            copy = list(self.processed_lines_data)
+            with self.data_lock:
+                copy = list(self.processed_lines_data)
             for i, row in enumerate(copy):
+                if self._closing:
+                    return
                 if i < self.temp_split_line:
                     seg = self.get_segment_for_line(i)
                     self.draw_one_line(row, i, seg.skew_factor, seg.global_x_offset)
                 else:
                     self.draw_one_line(row, i, self.temp_skew, self.temp_offset)
-            self.current_line_index = len(copy)
+            with self.data_lock:
+                self.current_line_index = len(copy)
             self.mark_image_dirty()
         threading.Thread(target=worker, daemon=True).start()
 
@@ -1327,7 +1647,8 @@ class FaxDecoderApp:
             messagebox.showinfo("提示", "没有图像可保存")
             return
 
-        img_data = self.image_array[:self.current_line_index, :]
+        with self.data_lock:
+            img_data = self.image_array[:self.current_line_index, :].copy()
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         default_name = f"FAX_{ts}.png"
@@ -1494,7 +1815,7 @@ class FaxDecoderApp:
             wf.setsampwidth(2)
             wf.setframerate(SAMPLE_RATE_LIVE)
 
-            while self.is_recording_audio and self.record_stream is not None:
+            while self.is_recording_audio and not self._closing and self.record_stream is not None:
                 try:
                     data = self.record_stream.read(CHUNK_SIZE, exception_on_overflow=False)
                 except Exception as e:
@@ -1511,9 +1832,9 @@ class FaxDecoderApp:
 
     def stop_recording_save(self):
         self.is_recording_audio = False
-        if self.record_thread is not None:
+        if self.record_thread is not None and self.record_thread.is_alive():
             self.record_thread.join(timeout=2.0)
-            self.record_thread = None
+        self.record_thread = None
         if self.record_stream is not None:
             try:
                 self.record_stream.stop_stream()
@@ -1529,6 +1850,15 @@ class FaxDecoderApp:
             self.record_pyaudio = None
 
         self.set_status("录音结束")
+
+        if self._closing:
+            try:
+                if self.record_temp_path and os.path.exists(self.record_temp_path):
+                    os.remove(self.record_temp_path)
+            except Exception:
+                pass
+            self.record_temp_path = None
+            return
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         default_name = f"FAX_record_{ts}.wav"
@@ -1558,54 +1888,86 @@ class FaxDecoderApp:
         self.update_record_window()
 
     def reinit_bitmap(self):
-        self.image_array = np.zeros((MAX_LINES, self.image_width), dtype=np.uint8)
-        self.current_line_index = 0
-        self.processed_lines_data = []
-        self.sync_segments = [SyncSegment(0, 0.0, 0.0)]
-        self.skew_factor = 0.0
-        self.global_x_offset = 0.0
+        with self.data_lock:
+            self.image_array = np.zeros((MAX_LINES, self.image_width), dtype=np.uint8)
+            self.current_line_index = 0
+            self.processed_lines_data = []
+            self.sync_segments = [SyncSegment(0, 0.0, 0.0)]
+            self.skew_factor = 0.0
+            self.global_x_offset = 0.0
         self.mark_image_dirty()
 
     def clear_all(self):
-        self.current_line_index = 0
-        self.processed_lines_data = []
-        self.sync_segments = [SyncSegment(0, 0.0, 0.0)]
-        self.skew_factor = 0.0
-        self.global_x_offset = 0.0
-        self.temp_skew = 0.0
-        self.temp_offset = 0.0
-        self.image_array[:] = 0
+        if self.active_calib_window is not None and self.active_calib_window != "file":
+            self.calib_state = "NONE"
+            self.is_in_manual_mode = False
+            self.active_calib_window = None
+            self.hide_calib_bar()
+            self.unlock_calib_menus()
+            self._set_manual_menu_state("disabled" if self.is_decoding else "normal")
+
+        with self.data_lock:
+            self.current_line_index = 0
+            self.processed_lines_data = []
+            self.sync_segments = [SyncSegment(0, 0.0, 0.0)]
+            self.skew_factor = 0.0
+            self.global_x_offset = 0.0
+            self.temp_skew = 0.0
+            self.temp_offset = 0.0
+            self.temp_split_line = 0
+            self.image_array[:] = 0
+
+        self.view_scale = 1.0
+        self.view_offset_x = 0.0
+        self.view_offset_y = 0.0
+
         self.mark_image_dirty()
         self.set_status("已清空图像")
 
     def on_close(self):
-        try:
-            self.is_recording_audio = False
-            self.is_decoding = False
-            if self.record_thread is not None:
-                self.record_thread.join(timeout=1.0)
-            if self.process_thread is not None:
-                self.process_thread.join(timeout=1.0)
-            for s in (self.record_stream, self.audio_stream):
-                if s is not None:
-                    try:
-                        s.stop_stream()
-                        s.close()
-                    except Exception:
-                        pass
-            for p in (self.record_pyaudio, self.pyaudio_instance):
-                if p is not None:
-                    try:
-                        p.terminate()
-                    except Exception:
-                        pass
-            if self.record_temp_path and os.path.exists(self.record_temp_path):
+        if self._closing:
+            return
+        self._closing = True
+
+        self.is_recording_audio = False
+        self.is_decoding = False
+
+        for s in (self.record_stream, self.audio_stream):
+            if s is not None:
                 try:
-                    os.remove(self.record_temp_path)
+                    s.stop_stream()
                 except Exception:
                     pass
-        finally:
+                try:
+                    s.close()
+                except Exception:
+                    pass
+        self.record_stream = None
+        self.audio_stream = None
+
+        for t in (self.record_thread, self.process_thread, self.file_decode_thread):
+            if t is not None and t.is_alive():
+                t.join(timeout=2.0)
+
+        for p in (self.record_pyaudio, self.pyaudio_instance):
+            if p is not None:
+                try:
+                    p.terminate()
+                except Exception:
+                    pass
+        self.record_pyaudio = None
+        self.pyaudio_instance = None
+
+        if self.record_temp_path and os.path.exists(self.record_temp_path):
+            try:
+                os.remove(self.record_temp_path)
+            except Exception:
+                pass
+
+        try:
             self.root.destroy()
+        except Exception:
+            pass
 
     def run(self):
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
