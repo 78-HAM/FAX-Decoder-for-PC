@@ -25,6 +25,13 @@ jobs:
             artifact: FAXDecoder-windows-x86.exe
             python_arch: x86
 
+          # Windows 兼容旧系统版本（Python 3.8，支持 Win7 SP1+）
+          - os: windows-2019
+            target: windows-x64-legacy
+            artifact: FAXDecoder-windows-x64-legacy.exe
+            python_arch: x64
+            python_version: '3.8'
+
           # Linux
           - os: ubuntu-22.04
             target: linux-x64
@@ -49,19 +56,26 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python_version || '3.11' }}
           architecture: ${{ matrix.python_arch }}
 
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y portaudio19-dev libsndfile1
+          sudo apt-get install -y portaudio19-dev libsndfile1 upx-ucl
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install portaudio libsndfile
+          brew install portaudio libsndfile upx
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install upx -y --no-progress
+          echo "UPX_DIR=C:\ProgramData\chocolatey\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Install Python packages
         run: |
@@ -76,26 +90,38 @@ jobs:
       - name: Build with PyInstaller (Windows)
         if: runner.os == 'Windows'
         shell: cmd
-        run: pyinstaller --noconfirm --clean --onefile --windowed --name FAXDecoder --icon icon/icon.ico --exclude-module tkinter.test --exclude-module test --exclude-module unittest --exclude-module pydoc --exclude-module doctest --exclude-module email --exclude-module http --exclude-module xml --exclude-module pickle --exclude-module sqlite3 --exclude-module multiprocessing --exclude-module asyncio main/Decoder.py
+        run: pyinstaller --noconfirm --clean --onefile --windowed --name FAXDecoder --icon icon/icon.ico --upx-dir "%UPX_DIR%" --optimize 2 --exclude-module tkinter.test --exclude-module test --exclude-module unittest --exclude-module pydoc --exclude-module doctest main/Decoder.py
 
-      - name: Build with PyInstaller (Linux / macOS)
-        if: runner.os != 'Windows'
+      - name: Build with PyInstaller (Linux)
+        if: runner.os == 'Linux'
         run: |
           pyinstaller --noconfirm --clean --onefile --windowed \
             --name FAXDecoder \
             --icon icon/icon.ico \
+            --upx-dir /usr/bin \
+            --strip \
+            --optimize 2 \
             --exclude-module tkinter.test \
             --exclude-module test \
             --exclude-module unittest \
             --exclude-module pydoc \
             --exclude-module doctest \
-            --exclude-module email \
-            --exclude-module http \
-            --exclude-module xml \
-            --exclude-module pickle \
-            --exclude-module sqlite3 \
-            --exclude-module multiprocessing \
-            --exclude-module asyncio \
+            main/Decoder.py
+
+      - name: Build with PyInstaller (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed \
+            --name FAXDecoder \
+            --icon icon/icon.ico \
+            --upx-dir $(brew --prefix upx)/bin \
+            --strip \
+            --optimize 2 \
+            --exclude-module tkinter.test \
+            --exclude-module test \
+            --exclude-module unittest \
+            --exclude-module pydoc \
+            --exclude-module doctest \
             main/Decoder.py
 
       - name: Prepare artifact (Windows)
