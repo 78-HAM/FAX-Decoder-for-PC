@@ -200,9 +200,3 @@ MAX_LINES         = 10000   # 最大图像行数
 - `self.spectrum_decay_rate`：频谱衰减速度（0.1 ~ 0.99）
 
 ---
-
-## 项目结构
-
-fax_decoder.py        # 主程序（单文件）
-README.md             # 中文文档
-EN.md                 # 英文文档
