@@ -35,9 +35,10 @@ jobs:
           echo "Syntax OK"
 
       - name: Run script and kill after timeout
+        shell: bash
         run: |
-          xvfb-run -a python << 'EOF'
-          import subprocess, os, signal, sys, time
+          cat > /tmp/run_check.py << 'PYEOF'
+          import subprocess, os, signal, sys
 
           proc = subprocess.Popen(
               [sys.executable, 'main/Decoder.py'],
@@ -52,10 +53,9 @@ jobs:
               if proc.returncode != 0:
                   print('FAILED: script crashed on startup')
                   sys.exit(1)
-              else:
-                  print('Script exited cleanly (unexpected for GUI, but OK)')
+              print('Script exited cleanly')
           except subprocess.TimeoutExpired:
-              print(f'=== Process alive after {timeout}s ===')
+              print('=== Process alive after %ds ===' % timeout)
               print('GUI launched successfully, killing process group...')
               try:
                   os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
@@ -71,7 +71,8 @@ jobs:
               except Exception:
                   pass
               print('Check passed')
-          EOF
+          PYEOF
+          xvfb-run -a python /tmp/run_check.py
 
   build:
     name: Build ${{ matrix.target }}
@@ -146,14 +147,16 @@ jobs:
           pip install pyaudio
 
       - name: Convert PNG icon to ICO
+        shell: bash
         run: |
-          python << 'EOF'
+          cat > /tmp/convert_icon.py << 'PYEOF'
           from PIL import Image
           Image.open('icon/icon.png').convert('RGBA').save(
               'icon/icon.ico',
               sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)]
           )
-          EOF
+          PYEOF
+          python /tmp/convert_icon.py
 
       - name: Build with PyInstaller on Windows
         if: runner.os == 'Windows'
