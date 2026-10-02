@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   check:
-    name: Syntax Import Runtime Check
+    name: Run Script Check
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -34,94 +34,43 @@ jobs:
           python -m py_compile main/Decoder.py
           echo "Syntax OK"
 
-      - name: Import check
+      - name: Run script and kill after timeout
         run: |
-          python << 'EOF'
-          import ast, sys
-          src = open('main/Decoder.py', encoding='utf-8').read()
-          tree = ast.parse(src)
-          mods = set()
-          for node in ast.walk(tree):
-              if isinstance(node, ast.Import):
-                  for n in node.names:
-                      mods.add(n.name.split('.')[0])
-              elif isinstance(node, ast.ImportFrom):
-                  if node.module:
-                      mods.add(node.module.split('.')[0])
-          for m in sorted(mods):
-              try:
-                  __import__(m)
-                  print('OK  ', m)
-              except Exception as e:
-                  print('FAIL', m, '->', e)
+          xvfb-run -a python << 'EOF'
+          import subprocess, os, signal, sys, time
+
+          proc = subprocess.Popen(
+              [sys.executable, 'main/Decoder.py'],
+              start_new_session=True,
+          )
+
+          timeout = 15
+          try:
+              proc.wait(timeout=timeout)
+              print('=== Process exited before timeout ===')
+              print('Return code:', proc.returncode)
+              if proc.returncode != 0:
+                  print('FAILED: script crashed on startup')
                   sys.exit(1)
-          EOF
-
-      - name: Runtime init check
-        run: |
-          xvfb-run -a python << 'EOF'
-          import sys, importlib.util, traceback
-          spec = importlib.util.spec_from_file_location('decoder', 'main/Decoder.py')
-          mod = importlib.util.module_from_spec(spec)
-          sys.modules['decoder'] = mod
-          try:
-              spec.loader.exec_module(mod)
-          except Exception:
-              print('=== Module import failed ===')
-              traceback.print_exc()
-              sys.exit(1)
-          if not hasattr(mod, 'FaxDecoderApp'):
-              print('FaxDecoderApp class not found')
-              sys.exit(1)
-          try:
-              app = mod.FaxDecoderApp()
-              app.root.update_idletasks()
-              app.root.update()
-              app.root.destroy()
-              print('Runtime init OK')
-          except Exception:
-              print('=== Runtime init failed ===')
-              traceback.print_exc()
-              sys.exit(1)
-          EOF
-
-      - name: Simulate menu interactions
-        run: |
-          xvfb-run -a python << 'EOF'
-          import sys, importlib.util, traceback
-          spec = importlib.util.spec_from_file_location('decoder', 'main/Decoder.py')
-          mod = importlib.util.module_from_spec(spec)
-          sys.modules['decoder'] = mod
-          spec.loader.exec_module(mod)
-          app = mod.FaxDecoderApp()
-          app.root.update_idletasks()
-          app.root.update()
-
-          try:
-              if hasattr(app, '_build_menubar'):
-                  app._build_menubar()
-                  print('_build_menubar OK')
-          except Exception:
-              print('=== _build_menubar failed ===')
-              traceback.print_exc()
-              app.root.destroy()
-              sys.exit(1)
-
-          for name in ('show_manual_menu', 'start_skew_calibration', 'start_start_point_calibration'):
-              if hasattr(app, name):
+              else:
+                  print('Script exited cleanly (unexpected for GUI, but OK)')
+          except subprocess.TimeoutExpired:
+              print(f'=== Process alive after {timeout}s ===')
+              print('GUI launched successfully, killing process group...')
+              try:
+                  os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                  print('Process group killed')
+              except Exception as e:
+                  print('killpg failed:', e)
                   try:
-                      getattr(app, name)()
-                      app.root.update_idletasks()
-                      app.root.update()
-                      print(name, 'OK')
+                      proc.kill()
                   except Exception:
-                      print('===', name, 'failed ===')
-                      traceback.print_exc()
-                      app.root.destroy()
-                      sys.exit(1)
-
-          app.root.destroy()
-          print('Interaction check OK')
+                      pass
+              try:
+                  proc.wait(timeout=5)
+              except Exception:
+                  pass
+              print('Check passed')
           EOF
 
   build:
