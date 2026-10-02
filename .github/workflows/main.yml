@@ -1,4 +1,4 @@
-name: Build and Release
+name: Check and Build
 
 on:
   workflow_dispatch:
@@ -7,8 +7,126 @@ permissions:
   contents: write
 
 jobs:
+  check:
+    name: Syntax + Import + Runtime Check
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y portaudio19-dev libsndfile1 xvfb
+
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy soundfile pillow pyaudio
+
+      - name: Syntax check
+        run: |
+          python -m py_compile main/Decoder.py
+          echo "Syntax OK"
+
+      - name: Import check
+        run: |
+          python -c "
+import ast, sys
+src = open('main/Decoder.py', encoding='utf-8').read()
+tree = ast.parse(src)
+mods = set()
+for node in ast.walk(tree):
+    if isinstance(node, ast.Import):
+        for n in node.names:
+            mods.add(n.name.split('.')[0])
+    elif isinstance(node, ast.ImportFrom):
+        if node.module:
+            mods.add(node.module.split('.')[0])
+for m in sorted(mods):
+    try:
+        __import__(m)
+        print('OK  ', m)
+    except Exception as e:
+        print('FAIL', m, '->', e)
+        sys.exit(1)
+"
+
+      - name: Runtime init check (xvfb)
+        run: |
+          xvfb-run -a python -c "
+import sys, importlib.util, traceback
+spec = importlib.util.spec_from_file_location('decoder', 'main/Decoder.py')
+mod = importlib.util.module_from_spec(spec)
+sys.modules['decoder'] = mod
+try:
+    spec.loader.exec_module(mod)
+except Exception:
+    print('=== Module import failed ===')
+    traceback.print_exc()
+    sys.exit(1)
+if not hasattr(mod, 'FaxDecoderApp'):
+    print('FaxDecoderApp class not found')
+    sys.exit(1)
+try:
+    app = mod.FaxDecoderApp()
+    app.root.update_idletasks()
+    app.root.update()
+    app.root.destroy()
+    print('Runtime init OK')
+except Exception:
+    print('=== Runtime init failed ===')
+    traceback.print_exc()
+    sys.exit(1)
+"
+
+      - name: Simulate menu/setup interactions
+        run: |
+          xvfb-run -a python -c "
+import sys, importlib.util, traceback
+spec = importlib.util.spec_from_file_location('decoder', 'main/Decoder.py')
+mod = importlib.util.module_from_spec(spec)
+sys.modules['decoder'] = mod
+spec.loader.exec_module(mod)
+app = mod.FaxDecoderApp()
+app.root.update_idletasks()
+app.root.update()
+
+try:
+    if hasattr(app, '_build_menubar'):
+        app._build_menubar()
+        print('_build_menubar OK')
+except Exception:
+    print('=== _build_menubar failed ===')
+    traceback.print_exc()
+    app.root.destroy()
+    sys.exit(1)
+
+for name in ('show_manual_menu', 'start_skew_calibration', 'start_start_point_calibration'):
+    if hasattr(app, name):
+        try:
+            getattr(app, name)()
+            app.root.update_idletasks()
+            app.root.update()
+            print(name, 'OK')
+        except Exception:
+            print('===', name, 'failed ===')
+            traceback.print_exc()
+            app.root.destroy()
+            sys.exit(1)
+
+app.root.destroy()
+print('Interaction check OK')
+"
+
   build:
     name: Build ${{ matrix.target }}
+    needs: check
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -140,7 +258,6 @@ jobs:
     permissions:
       contents: write
     steps:
-      # 获取当前仓库的最新 tag 名称
       - name: Find latest tag
         id: latest_tag
         uses: oprypin/find-latest-tag@v1
@@ -159,7 +276,6 @@ jobs:
           find artifacts -type f -exec cp {} release/ \;
           ls -lh release/
 
-      # 发到最新 tag。softprops/action-gh-release 会自动创建不存在的 tag
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
