@@ -36,93 +36,93 @@ jobs:
 
       - name: Import check
         run: |
-          python -c "
-import ast, sys
-src = open('main/Decoder.py', encoding='utf-8').read()
-tree = ast.parse(src)
-mods = set()
-for node in ast.walk(tree):
-    if isinstance(node, ast.Import):
-        for n in node.names:
-            mods.add(n.name.split('.')[0])
-    elif isinstance(node, ast.ImportFrom):
-        if node.module:
-            mods.add(node.module.split('.')[0])
-for m in sorted(mods):
-    try:
-        __import__(m)
-        print('OK  ', m)
-    except Exception as e:
-        print('FAIL', m, '->', e)
-        sys.exit(1)
-"
+          python << 'EOF'
+          import ast, sys
+          src = open('main/Decoder.py', encoding='utf-8').read()
+          tree = ast.parse(src)
+          mods = set()
+          for node in ast.walk(tree):
+              if isinstance(node, ast.Import):
+                  for n in node.names:
+                      mods.add(n.name.split('.')[0])
+              elif isinstance(node, ast.ImportFrom):
+                  if node.module:
+                      mods.add(node.module.split('.')[0])
+          for m in sorted(mods):
+              try:
+                  __import__(m)
+                  print('OK  ', m)
+              except Exception as e:
+                  print('FAIL', m, '->', e)
+                  sys.exit(1)
+          EOF
 
       - name: Runtime init check (xvfb)
         run: |
-          xvfb-run -a python -c "
-import sys, importlib.util, traceback
-spec = importlib.util.spec_from_file_location('decoder', 'main/Decoder.py')
-mod = importlib.util.module_from_spec(spec)
-sys.modules['decoder'] = mod
-try:
-    spec.loader.exec_module(mod)
-except Exception:
-    print('=== Module import failed ===')
-    traceback.print_exc()
-    sys.exit(1)
-if not hasattr(mod, 'FaxDecoderApp'):
-    print('FaxDecoderApp class not found')
-    sys.exit(1)
-try:
-    app = mod.FaxDecoderApp()
-    app.root.update_idletasks()
-    app.root.update()
-    app.root.destroy()
-    print('Runtime init OK')
-except Exception:
-    print('=== Runtime init failed ===')
-    traceback.print_exc()
-    sys.exit(1)
-"
+          xvfb-run -a python << 'EOF'
+          import sys, importlib.util, traceback
+          spec = importlib.util.spec_from_file_location('decoder', 'main/Decoder.py')
+          mod = importlib.util.module_from_spec(spec)
+          sys.modules['decoder'] = mod
+          try:
+              spec.loader.exec_module(mod)
+          except Exception:
+              print('=== Module import failed ===')
+              traceback.print_exc()
+              sys.exit(1)
+          if not hasattr(mod, 'FaxDecoderApp'):
+              print('FaxDecoderApp class not found')
+              sys.exit(1)
+          try:
+              app = mod.FaxDecoderApp()
+              app.root.update_idletasks()
+              app.root.update()
+              app.root.destroy()
+              print('Runtime init OK')
+          except Exception:
+              print('=== Runtime init failed ===')
+              traceback.print_exc()
+              sys.exit(1)
+          EOF
 
-      - name: Simulate menu/setup interactions
+      - name: Simulate menu and setup interactions
         run: |
-          xvfb-run -a python -c "
-import sys, importlib.util, traceback
-spec = importlib.util.spec_from_file_location('decoder', 'main/Decoder.py')
-mod = importlib.util.module_from_spec(spec)
-sys.modules['decoder'] = mod
-spec.loader.exec_module(mod)
-app = mod.FaxDecoderApp()
-app.root.update_idletasks()
-app.root.update()
+          xvfb-run -a python << 'EOF'
+          import sys, importlib.util, traceback
+          spec = importlib.util.spec_from_file_location('decoder', 'main/Decoder.py')
+          mod = importlib.util.module_from_spec(spec)
+          sys.modules['decoder'] = mod
+          spec.loader.exec_module(mod)
+          app = mod.FaxDecoderApp()
+          app.root.update_idletasks()
+          app.root.update()
 
-try:
-    if hasattr(app, '_build_menubar'):
-        app._build_menubar()
-        print('_build_menubar OK')
-except Exception:
-    print('=== _build_menubar failed ===')
-    traceback.print_exc()
-    app.root.destroy()
-    sys.exit(1)
+          try:
+              if hasattr(app, '_build_menubar'):
+                  app._build_menubar()
+                  print('_build_menubar OK')
+          except Exception:
+              print('=== _build_menubar failed ===')
+              traceback.print_exc()
+              app.root.destroy()
+              sys.exit(1)
 
-for name in ('show_manual_menu', 'start_skew_calibration', 'start_start_point_calibration'):
-    if hasattr(app, name):
-        try:
-            getattr(app, name)()
-            app.root.update_idletasks()
-            app.root.update()
-            print(name, 'OK')
-        except Exception:
-            print('===', name, 'failed ===')
-            traceback.print_exc()
-            app.root.destroy()
-            sys.exit(1)
+          for name in ('show_manual_menu', 'start_skew_calibration', 'start_start_point_calibration'):
+              if hasattr(app, name):
+                  try:
+                      getattr(app, name)()
+                      app.root.update_idletasks()
+                      app.root.update()
+                      print(name, 'OK')
+                  except Exception:
+                      print('===', name, 'failed ===')
+                      traceback.print_exc()
+                      app.root.destroy()
+                      sys.exit(1)
 
-app.root.destroy()
-print('Interaction check OK')
-"
+          app.root.destroy()
+          print('Interaction check OK')
+          EOF
 
   build:
     name: Build ${{ matrix.target }}
@@ -167,18 +167,18 @@ print('Interaction check OK')
           python-version: '3.11'
           architecture: ${{ matrix.python_arch }}
 
-      - name: Install dependencies (Linux)
+      - name: Install dependencies on Linux
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y portaudio19-dev libsndfile1 upx-ucl
 
-      - name: Install dependencies (macOS)
+      - name: Install dependencies on macOS
         if: runner.os == 'macOS'
         run: |
           brew install portaudio libsndfile upx
 
-      - name: Install dependencies (Windows)
+      - name: Install dependencies on Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -193,14 +193,20 @@ print('Interaction check OK')
 
       - name: Convert PNG icon to ICO
         run: |
-          python -c "from PIL import Image; Image.open('icon/icon.png').convert('RGBA').save('icon/icon.ico', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+          python << 'EOF'
+          from PIL import Image
+          Image.open('icon/icon.png').convert('RGBA').save(
+              'icon/icon.ico',
+              sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)]
+          )
+          EOF
 
-      - name: Build with PyInstaller (Windows)
+      - name: Build with PyInstaller on Windows
         if: runner.os == 'Windows'
         shell: cmd
         run: pyinstaller --noconfirm --clean --onefile --windowed --name FAXDecoder --icon icon/icon.ico --upx-dir "%UPX_DIR%" --optimize 2 --exclude-module tkinter.test --exclude-module test --exclude-module unittest --exclude-module pydoc --exclude-module doctest main/Decoder.py
 
-      - name: Build with PyInstaller (Linux)
+      - name: Build with PyInstaller on Linux
         if: runner.os == 'Linux'
         run: |
           pyinstaller --noconfirm --clean --onefile --windowed \
@@ -216,7 +222,7 @@ print('Interaction check OK')
             --exclude-module doctest \
             main/Decoder.py
 
-      - name: Build with PyInstaller (macOS)
+      - name: Build with PyInstaller on macOS
         if: runner.os == 'macOS'
         run: |
           pyinstaller --noconfirm --clean --onefile --windowed \
@@ -232,13 +238,13 @@ print('Interaction check OK')
             --exclude-module doctest \
             main/Decoder.py
 
-      - name: Prepare artifact (Windows)
+      - name: Prepare artifact on Windows
         if: runner.os == 'Windows'
         shell: bash
         run: |
           mv dist/FAXDecoder.exe dist/${{ matrix.artifact }}
 
-      - name: Prepare artifact (Linux / macOS)
+      - name: Prepare artifact on Linux and macOS
         if: runner.os != 'Windows'
         run: |
           mv dist/FAXDecoder dist/${{ matrix.artifact }}
