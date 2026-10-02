@@ -31,12 +31,12 @@ jobs:
             artifact: FAXDecoder-linux-x64
             python_arch: x64
 
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04-arm
             target: linux-arm64
             artifact: FAXDecoder-linux-arm64
             python_arch: arm64
 
-          # macOS (仅 ARM64，无 AMD64)
+          # macOS (仅 ARM64)
           - os: macos-14
             target: macos-arm64
             artifact: FAXDecoder-macos-arm64
@@ -75,46 +75,11 @@ jobs:
 
       - name: Build with PyInstaller (Windows)
         if: runner.os == 'Windows'
-        run: |
-          pyinstaller --noconfirm --clean --onefile --windowed ^
-            --name FAXDecoder ^
-            --icon icon/icon.ico ^
-            --exclude-module tkinter.test ^
-            --exclude-module test ^
-            --exclude-module unittest ^
-            --exclude-module pydoc ^
-            --exclude-module doctest ^
-            --exclude-module email ^
-            --exclude-module http ^
-            --exclude-module xml ^
-            --exclude-module pickle ^
-            --exclude-module sqlite3 ^
-            --exclude-module multiprocessing ^
-            --exclude-module asyncio ^
-            main/Decoder.py
+        shell: cmd
+        run: pyinstaller --noconfirm --clean --onefile --windowed --name FAXDecoder --icon icon/icon.ico --exclude-module tkinter.test --exclude-module test --exclude-module unittest --exclude-module pydoc --exclude-module doctest --exclude-module email --exclude-module http --exclude-module xml --exclude-module pickle --exclude-module sqlite3 --exclude-module multiprocessing --exclude-module asyncio main/Decoder.py
 
-      - name: Build with PyInstaller (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          pyinstaller --noconfirm --clean --onefile --windowed \
-            --name FAXDecoder \
-            --icon icon/icon.ico \
-            --exclude-module tkinter.test \
-            --exclude-module test \
-            --exclude-module unittest \
-            --exclude-module pydoc \
-            --exclude-module doctest \
-            --exclude-module email \
-            --exclude-module http \
-            --exclude-module xml \
-            --exclude-module pickle \
-            --exclude-module sqlite3 \
-            --exclude-module multiprocessing \
-            --exclude-module asyncio \
-            main/Decoder.py
-
-      - name: Build with PyInstaller (macOS)
-        if: runner.os == 'macOS'
+      - name: Build with PyInstaller (Linux / macOS)
+        if: runner.os != 'Windows'
         run: |
           pyinstaller --noconfirm --clean --onefile --windowed \
             --name FAXDecoder \
@@ -156,6 +121,8 @@ jobs:
     name: Release
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -171,8 +138,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: 1.0.0
-          name: FAX Decoder 1.0.0
+          tag_name: "1.0.0"
+          name: "FAX Decoder 1.0.0"
           draft: false
           prerelease: false
           files: release/*
