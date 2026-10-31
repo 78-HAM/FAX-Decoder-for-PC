@@ -16,6 +16,7 @@ struct AppSettings {
     float seconds_per_line          = 0.5f;
     float contrast                  = 1.1f;
     bool  is_binary_mode            = false;
+    bool  is_light_theme            = false;
     float spectrum_decay_rate       = 0.6f;
     float skew_factor               = 0.0f;
     float global_x_offset           = 0.0f;

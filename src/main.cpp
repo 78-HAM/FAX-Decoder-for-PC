@@ -79,6 +79,8 @@ static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
 }
 
 int main(int, char**) {
+    bool is_fullscreen = false;
+    int wx, wy, ww, wh;
     glfwSetErrorCallback(glfw_error_cb);
     if (!glfwInit()) {
         std::system("pause");
@@ -186,6 +188,21 @@ int main(int, char**) {
         
         app.update();
         ImGui::PopFont();
+
+        // 处理全屏请求
+        if (app.toggle_fullscreen_) {
+            app.toggle_fullscreen_ = false;
+                glfwGetWindowPos(window, &wx, &wy);
+                glfwGetWindowSize(window, &ww, &wh);
+                GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+                const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+                glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+                is_fullscreen = true;
+            } else {
+                glfwSetWindowMonitor(window, nullptr, wx, wy, ww, wh, 0);
+                is_fullscreen = false;
+            }
+        }
 
         if (app.wantsClose()) glfwSetWindowShouldClose(window, GLFW_TRUE);
 

@@ -106,6 +106,8 @@ void MainWindow::draw() {
     drawCalibBar();
 }
 
+void MainWindow::setTheme(bool is_light) { is_light_theme_ = is_light; }
+
 void MainWindow::drawMenuBar() {
     if (!ImGui::BeginMainMenuBar()) return;
 
@@ -128,6 +130,10 @@ void MainWindow::drawMenuBar() {
             ImGui::EndMenu();
         }
         
+        if (ImGui::BeginMenu("Theme")) {
+            if (ImGui::MenuItem("Light", nullptr, is_light_theme_)) { if (cb_.onSetTheme) cb_.onSetTheme(true); }
+            ImGui::EndMenu();
+        }
         if (ImGui::BeginMenu(t("menu.settings.lang"))) {
             for (auto& L : kLangList) {
                 bool sel = (language_ == L.first);
@@ -173,8 +179,8 @@ void MainWindow::drawCanvas() {
     dl->AddRectFilled(p0, ImVec2(p0.x + avail.x, p0.y + avail.y), IM_COL32(0, 0, 0, 255));
 
     if (image_tex_ && image_w_ > 0 && image_h_ > 0) {
-        // 计算缩放基准时，总高度取 max(当前行数, 500)，避免早期行数太少导致画面无限放大后瞬间骤缩
-        float calc_h = std::max((float)image_h_, 500.0f);
+        // 初始倍数优化：将虚拟高度基准从 500 降到 150，直接放大画面
+        float calc_h = std::max((float)image_h_, 150.0f);
         float base = std::min(avail.x / image_w_, avail.y / calc_h);
         float s = base * view_scale_;
         float w = image_w_ * s;

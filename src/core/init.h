@@ -100,6 +100,8 @@ private:
     void _onShowManual();
     void _onToggleRecord();
     void _onLoadFont();
+    void _onToggleFullscreen();
+    void _onSetTheme(bool is_light);
 
     void _audioInputCallback(const float* samples, int n, int sr);
     void _fileDecodeWorker(AudioFile file);
@@ -127,6 +129,7 @@ private:
     bool   wants_close_ = false;
     bool   has_file_ = false;
     bool   image_dirty_ = true;
+    bool   toggle_fullscreen_ = false;
     bool   chinese_available_ = false;
     std::string status_;
     std::string current_file_;

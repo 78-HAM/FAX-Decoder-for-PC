@@ -24,6 +24,8 @@ struct MainWindowCallbacks {
     std::function<void(const char*)> onSetLanguage;
     std::function<void()> onStartSkewCalib, onStartStartPointCalib;
     std::function<void(float)> onSetRpm;
+    std::function<void()> onToggleFullscreen;
+    std::function<void(bool)> onSetTheme;
     std::function<void()> onShowManual;
     std::function<void(float*, int)> getSpectrum;
 };
@@ -117,6 +119,7 @@ private:
     ImVec2 image_screen_size_{0, 0};
 
     bool dragging_ = false;
+    bool is_fullscreen_ = false;
     ImVec2 drag_start_{0, 0};
     float drag_off_x_ = 0.0f, drag_off_y_ = 0.0f;
 };
@@ -267,6 +270,7 @@ private:
     int snap_w_ = 0, snap_h_ = 0;
 
     bool dragging_ = false;
+    bool is_fullscreen_ = false;
     ImVec2 drag_start_;
     float  drag_skew_   = 0.0f;
     float  drag_offset_ = 0.0f;

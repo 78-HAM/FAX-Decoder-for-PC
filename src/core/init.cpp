@@ -342,6 +342,8 @@ void App::_bindCallbacks() {
     cb.onSetRpm           = [this](float s) { _onSetRpm(s); };
     cb.onShowManual       = [this]() { _onShowManual(); };
     cb.onLoadFont         = [this]() { _onLoadFont(); };
+    cb.onToggleFullscreen = [this]() { _onToggleFullscreen(); };
+    cb.onSetTheme         = [this](bool l) { _onSetTheme(l); };
     cb.getSpectrum        = [this](float* out, int n) { _updateSpectrumBars(out, n); };
 
     main_win_.setCallbacks(cb);
@@ -623,6 +625,17 @@ void App::_onSaveImage() {
 }
 
 void App::_onExit() { wants_close_ = true; }
+
+void App::_onToggleFullscreen() {
+    toggle_fullscreen_ = true;
+}
+
+void App::_onSetTheme(bool is_light) {
+    settings_.is_light_theme = is_light;
+    if (is_light) ImGui::StyleColorsLight();
+    else ImGui::StyleColorsDark();
+    main_win_.setTheme(is_light);
+}
 
 void App::_onLoadFont() {
     std::string path = NativeFileDialog::openFile("Select Custom Font", "Font Files\0*.ttf;*.ttc;*.otf\0All Files\0*.*\0");
