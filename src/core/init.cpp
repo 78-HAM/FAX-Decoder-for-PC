@@ -1,3 +1,4 @@
+#include "util/NativeFileDialog.h"
 #include "core/init.h"
 #include "util/ImageIO.h"
 #ifdef HAVE_IMGUI_FILE_DIALOG
@@ -372,8 +373,7 @@ void App::_uploadImageIfDirty() {
 // ============================================================
 void App::_bindCallbacks() {
     MainWindowCallbacks cb;
-    cb.onStart            = [this]() { _onStart(); };
-    cb.onStop             = [this]() { _onStop(); };
+    cb.onToggleDecode     = [this]() { if (state_ == State::IDLE) _onStart(); else _onStop(); };
     cb.onClear            = [this]() { _onClear(); };
     cb.onExit             = [this]() { _onExit(); };
     cb.onOpenRecord       = [this]() { _onOpenRecord(); };
@@ -382,7 +382,6 @@ void App::_bindCallbacks() {
     cb.onSaveImage        = [this]() { _onSaveImage(); };
     cb.onShowAbout        = [this]() { _onShowAbout(); };
     cb.onCheckUpdate      = [this]() { _onCheckUpdate(); };
-    cb.onResetAudioDevice = [this]() { _onResetAudioDevice(); };
     cb.onSelectAudioDevice = [this]() { _onSelectAudioDevice(); };
     cb.onSetSpectrumDecay = [this]() { _onSetSpectrumDecay(); };
     cb.onSetImageWidth    = [this]() { _onSetImageWidth(); };
@@ -422,6 +421,7 @@ void App::_bindCalibHooks() {
         }
         image_.reprocessAll(settings_.is_binary_mode);
         image_dirty_ = true;
+        if (calib_win_.active()) calib_win_.exitCalib();
     };
 
     hk.applyStartPoint = [this](float x_img) {
@@ -434,9 +434,36 @@ void App::_bindCalibHooks() {
         }
         image_.reprocessAll(settings_.is_binary_mode);
         image_dirty_ = true;
+        if (calib_win_.active()) calib_win_.exitCalib();
     };
 
     hk.commitManual = [this]() {
+        // 1. 保存原始 RAW 数据（不包含校准）
+        auto& raws = image_.rawLines();
+        if (!raws.empty()) {
+            char filename[256];
+            std::time_t now = std::time(nullptr);
+            std::tm* tm = std::localtime(&now);
+            std::strftime(filename, sizeof(filename), "temp_%Y%m%d_%H%M%S.raw", tm);
+            
+            const char* home = std::getenv("HOME");
+            if (!home) home = ".";
+            std::string path = std::string(home) + "/" + filename;
+            
+            FILE* fp = std::fopen(path.c_str(), "wb");
+            if (fp) {
+                for (auto& row : raws) {
+                    for (float v : row) {
+                        uint8_t g = settings_.is_binary_mode ? (v > 0.5f ? 255 : 0) : (uint8_t)(v * 255.0f);
+                        std::fwrite(&g, 1, 1, fp);
+                    }
+                }
+                std::fclose(fp);
+                setStatus(std::string(i18n_.t("status.manual_saved")) + path);
+            }
+        }
+
+        // 2. 应用分割
         image_.addSegment({temp_split_line_, temp_skew_, temp_offset_});
         image_.reprocessAll(settings_.is_binary_mode);
         is_manual_ = false;
@@ -444,7 +471,7 @@ void App::_bindCalibHooks() {
         temp_offset_ = 0.0f;
         temp_split_line_ = 0;
         image_dirty_ = true;
-        setStatus(i18n_.t("status.manual_applied"));
+        if (calib_win_.active()) calib_win_.exitCalib();
     };
 
     hk.setStatus = [this](const char* s) { setStatus(s); };
@@ -565,17 +592,17 @@ void App::_onClear() {
 // 文件选择 / 文件解码
 // ============================================================
 void App::_onPickFile() {
-    file_dialog_open_ = true;
-#ifdef HAVE_IMGUI_FILE_DIALOG
-    IGFD::FileDialog::Instance()->OpenDialog(
-        "ChooseAudio", "Select Audio File",
-        ".wav,.mp3,.flac,.ogg,.aiff,.au");
-#else
-    // 兜底：进入 modal，让用户输入路径
-    modal_buf_[0] = '\0';
-    _openModal(MODAL_SAVE_RECORD);  // 复用文本输入 modal（name 会显示）
-    setStatus(i18n_.t("status.pick_file"));
-#endif
+    std::string path = NativeFileDialog::openFile("Select Audio File", "Audio Files\0*.wav;*.mp3;*.flac\0All Files\0*.*\0");
+    if (!path.empty()) {
+        current_file_ = path;
+        has_file_ = true;
+        main_win_.setHasFile(true);
+        std::string name = current_file_;
+        auto slash = name.find_last_of("/\\");
+        if (slash != std::string::npos) name = name.substr(slash + 1);
+        main_win_.setFileName(name);
+        setStatus(std::string(i18n_.t("status.loading_file")) + ": " + name);
+    }
 }
 
 void App::_onStartFileDecode() {

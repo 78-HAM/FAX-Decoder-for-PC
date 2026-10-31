@@ -14,11 +14,12 @@ struct CalibButton {
 };
 
 struct MainWindowCallbacks {
-    std::function<void()> onStart, onStop, onClear;
+    std::function<void()> onToggleDecode, onClear;
+    std::function<void()> onLoadFont;
     std::function<void()> onPickFile, onStartFileDecode, onSaveImage, onExit;
     std::function<void()> onOpenRecord;
     std::function<void()> onShowAbout, onCheckUpdate;
-    std::function<void()> onResetAudioDevice, onSelectAudioDevice;
+    std::function<void()> onSelectAudioDevice;
     std::function<void()> onSetSpectrumDecay, onSetImageWidth, onShowContrast;
     std::function<void(const char*)> onSetLanguage;
     std::function<void()> onStartSkewCalib, onStartStartPointCalib;

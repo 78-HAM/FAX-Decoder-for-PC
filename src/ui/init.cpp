@@ -26,42 +26,38 @@ int langIndex(const std::string& code) {
 using TR5 = std::array<const char*, 5>;
 const std::unordered_map<std::string, TR5>& trTable() {
     static const std::unordered_map<std::string, TR5> m = {
-        {"app.title",                    {"FAX Decoder", "FAX 解码器", "FAX Декодер", "FAX デコーダー", "FAX 解碼器"}},
-        {"menu.file",                    {"File", "文件", "Файл", "ファイル", "檔案"}},
-        {"menu.file.pick",               {"Select Audio File...", "选择音频文件…", "Выбрать аудиофайл…", "音声ファイルを選択…", "選擇音訊檔案…"}},
-        {"menu.file.decode",             {"Start File Decoding", "开始文件解码", "Начать декодирование", "ファイルデコード開始", "開始檔案解碼"}},
-        {"menu.file.save",               {"Save Image...", "保存图像…", "Сохранить изображение…", "画像を保存…", "儲存圖片…"}},
-        {"menu.file.exit",               {"Exit", "退出", "Выход", "終了", "結束"}},
-        {"menu.settings",                {"Settings", "设置", "Настройки", "設定", "設定"}},
-        {"menu.settings.spectrum_decay", {"Set Spectrum Decay", "设置频谱衰减速度", "Скорость затухания", "スペクトル減衰速度", "設定頻譜衰減速度"}},
-        {"menu.settings.width",          {"Set Image Width", "设置图像宽度", "Ширина изображения", "画像幅を設定", "設定圖片寬度"}},
-        {"menu.settings.contrast",       {"Set Contrast", "设置对比度", "Контраст", "コントラスト", "設定對比度"}},
-        {"menu.settings.language",       {"Language", "语言", "Язык", "言語", "語言"}},
-        {"menu.settings.skew",           {"Calibrate Skew", "校准歪斜", "Калибровка наклона", "傾き補正", "校正歪斜"}},
-        {"menu.settings.start",          {"Set Start Point", "设置起点", "Задать начало", "開始位置を設定", "設定起點"}},
-        {"menu.settings.rpm",            {"Select RPM", "选择转速", "Выбрать обороты", "回転数を選択", "選擇轉速"}},
-        {"menu.settings.manual",         {"Manual Correction", "手动纠正", "Ручная коррекция", "手動補正", "手動修正"}},
-        {"menu.drivers",                 {"Drivers", "驱动", "Драйверы", "ドライバー", "驅動程式"}},
-        {"menu.drivers.reset",           {"Reset", "重置", "Сброс", "リセット", "重設"}},
-        {"menu.drivers.settings",        {"Settings...", "设置…", "Настройки…", "設定…", "設定…"}},
-        {"menu.record",                  {"Recording", "录制", "Запись", "録音", "錄製"}},
-        {"menu.record.open",             {"Open Recording Panel", "打开录制面板", "Открыть панель записи", "録音パネルを開く", "開啟錄製面板"}},
-        {"menu.about",                   {"About", "关于", "О программе", "このアプリについて", "關於"}},
-        {"menu.about.about",             {"About", "关于", "О программе", "このアプリについて", "關於"}},
-        {"menu.about.check_update",      {"Check for Updates", "检查更新", "Проверить обновления", "更新を確認", "檢查更新"}},
-        {"btn.start",                    {"Start", "开始解码", "Старт", "開始", "開始解碼"}},
-        {"btn.stop",                     {"Stop", "停止解码", "Стоп", "停止", "停止解碼"}},
-        {"btn.clear",                    {"Clear", "清空图像", "Очистить", "クリア", "清空圖片"}},
-        {"label.spectrum",               {"Spectrum", "频谱", "Спектр", "スペクトル", "頻譜"}},
-        {"label.status",                 {"Status:", "状态：", "Статус:", "状態：", "狀態："}},
-        {"status.ready",                 {"Ready", "就绪", "Готов", "準備完了", "就緒"}},
-        {"status.no_file",               {"No file selected", "未选择文件", "Файл не выбран", "ファイル未選択", "未選擇檔案"}},
-        {"calib.btn.fine_tune",          {"Fine-tune", "手动调整", "Точная настройка", "微調整", "手動調整"}},
-        {"calib.btn.confirm_p1",         {"Confirm Point 1", "确定第 1 点", "Подтвердить точку 1", "点1を確定", "確定第 1 點"}},
-        {"calib.btn.apply",              {"Apply", "应用校准", "Применить", "適用", "套用校正"}},
-        {"calib.btn.back",               {"Back", "返回", "Назад", "戻る", "返回"}},
-        {"calib.btn.cancel",             {"Cancel", "取消", "Отмена", "キャンセル", "取消"}},
-        {"calib.btn.confirm_pos",        {"Confirm Position", "确定位置", "Подтвердить позицию", "位置を確定", "確定位置"}},
+        {"app.title", {"FAX Decoder 2.0", "FAX 解码器 2.0", "FAX Декодер 2.0", "FAX デコーダー 2.0", "FAX 解碼器 2.0"}},
+        {"menu.file", {"File", "文件", "Файл", "ファイル", "檔案"}},
+        {"menu.file.pick", {"Select Audio File...", "选择音频文件…", "Выбрать аудиофайл…", "音声ファイルを選択…", "選擇音訊檔案…"}},
+        {"menu.file.decode", {"Start File Decoding", "开始文件解码", "Начать декодирование", "ファイルデコード開始", "開始檔案解碼"}},
+        {"menu.file.save", {"Save Image...", "保存图像…", "Сохранить изображение…", "画像を保存…", "儲存圖片…"}},
+        {"menu.file.exit", {"Exit", "退出", "Выход", "終了", "結束"}},
+        {"menu.settings", {"Settings", "设置", "Настройки", "設定", "設定"}},
+        {"menu.settings.font", {"Load Custom Font...", "加载自定义字体…", "Загрузить шрифт…", "カスタムフォントを読込…", "載入自訂字體…"}},
+        {"menu.settings.rpm", {"RPM", "转速", "Обороты", "回転数", "轉速"}},
+        {"menu.settings.lang", {"Language", "语言", "Язык", "言語", "語言"}},
+        {"menu.settings.drivers", {"Audio Drivers", "音频驱动", "Аудио драйверы", "オーディオドライバー", "音訊驅動"}},
+        {"menu.calib", {"Calibration", "校准", "Калибровка", "キャリブレーション", "校正"}},
+        {"menu.calib.global", {"Global Calibration", "全局校准", "Глобальная калибровка", "全体キャリブレーション", "全域校正"}},
+        {"menu.calib.global.skew", {"Calibrate Skew", "校准歪斜", "Калибровка наклона", "傾き補正", "校正歪斜"}},
+        {"menu.calib.global.start", {"Set Start Point", "设置起点", "Задать начало", "開始位置を設定", "設定起點"}},
+        {"menu.calib.manual", {"Manual Correction", "手动纠错", "Ручная коррекция", "手動補正", "手動修正"}},
+        {"menu.record", {"Recording", "录制", "Запись", "録音", "錄製"}},
+        {"menu.about", {"About", "关于", "О программе", "このアプリについて", "關於"}},
+        {"menu.about.check_update", {"Check for Updates", "检查更新", "Проверить обновления", "更新を確認", "檢查更新"}},
+        {"btn.start", {"Start Decoding", "开始解码", "Старт", "デコード開始", "開始解碼"}},
+        {"btn.stop", {"Stop Decoding", "停止解码", "Стоп", "デコード停止", "停止解碼"}},
+        {"btn.clear", {"Clear Image", "清空图像", "Очистить", "クリア", "清空圖片"}},
+        {"label.spectrum", {"Spectrum", "频谱", "Спектр", "スペクトル", "頻譜"}},
+        {"label.status", {"Status:", "状态：", "Статус:", "状態：", "狀態："}},
+        {"status.ready", {"Ready", "就绪", "Готов", "準備完了", "就緒"}},
+        {"status.manual_saved", {"Manual RAW saved: ", "手动 RAW 已保存：", "Ручной RAW сохранён: ", "手動 RAW 保存済: ", "手動 RAW 已儲存："}},
+        {"calib.btn.fine_tune", {"Fine-tune", "手动调整", "Точная настройка", "微調整", "手動調整"}},
+        {"calib.btn.confirm_p1", {"Confirm Point 1", "确定第 1 点", "Подтвердить точку 1", "点1を確定", "確定第 1 點"}},
+        {"calib.btn.apply", {"Apply", "应用", "Применить", "適用", "套用"}},
+        {"calib.btn.back", {"Back", "返回", "Назад", "戻る", "返回"}},
+        {"calib.btn.cancel", {"Cancel", "取消", "Отмена", "キャンセル", "取消"}},
+        {"calib.btn.confirm_pos", {"Confirm Position", "确定位置", "Подтвердить позицию", "位置を確定", "確定位置"}},
     };
     return m;
 }
@@ -115,75 +111,60 @@ void MainWindow::drawMenuBar() {
 
     if (ImGui::BeginMenu(t("menu.file"))) {
         if (ImGui::MenuItem(t("menu.file.pick"))) { if (cb_.onPickFile) cb_.onPickFile(); }
-        if (ImGui::MenuItem(t("menu.file.decode"), nullptr, false, has_file_))
-                                                  { if (cb_.onStartFileDecode) cb_.onStartFileDecode(); }
+        if (ImGui::MenuItem(t("menu.file.decode"), nullptr, false, has_file_)) { if (cb_.onStartFileDecode) cb_.onStartFileDecode(); }
         ImGui::Separator();
-        if (ImGui::MenuItem(t("menu.file.save"), nullptr, false, has_image_))
-                                                  { if (cb_.onSaveImage) cb_.onSaveImage(); }
+        if (ImGui::MenuItem(t("menu.file.save"), nullptr, false, has_image_)) { if (cb_.onSaveImage) cb_.onSaveImage(); }
         ImGui::Separator();
         if (ImGui::MenuItem(t("menu.file.exit"))) { if (cb_.onExit) cb_.onExit(); }
         ImGui::EndMenu();
     }
 
     if (ImGui::BeginMenu(t("menu.settings"))) {
-        if (ImGui::MenuItem(t("menu.settings.spectrum_decay"))) { if (cb_.onSetSpectrumDecay) cb_.onSetSpectrumDecay(); }
-        if (ImGui::MenuItem(t("menu.settings.width")))          { if (cb_.onSetImageWidth) cb_.onSetImageWidth(); }
-        if (ImGui::MenuItem(t("menu.settings.contrast")))       { if (cb_.onShowContrast) cb_.onShowContrast(); }
-        ImGui::Separator();
-
-        if (ImGui::BeginMenu(t("menu.settings.language"))) {
+        if (ImGui::MenuItem(t("menu.settings.font"))) { if (cb_.onLoadFont) cb_.onLoadFont(); }
+        
+        if (ImGui::BeginMenu(t("menu.settings.rpm"))) {
+            struct R { const char* label; float sec; } opts[] = { {"30 RPM", 2.0f}, {"60 RPM", 1.0f}, {"120 RPM", 0.5f}, {"240 RPM", 0.25f}, {"480 RPM", 0.125f} };
+            for (auto& o : opts) { if (ImGui::MenuItem(o.label)) { if (cb_.onSetRpm) cb_.onSetRpm(o.sec); } }
+            ImGui::EndMenu();
+        }
+        
+        if (ImGui::BeginMenu(t("menu.settings.lang"))) {
             for (auto& L : kLangList) {
                 bool sel = (language_ == L.first);
-                bool enabled = true;
-                if (ImGui::MenuItem(L.second, nullptr, sel, enabled)) {
-                    if (cb_.onSetLanguage) cb_.onSetLanguage(L.first);
-                }
+                if (ImGui::MenuItem(L.second, nullptr, sel)) { if (cb_.onSetLanguage) cb_.onSetLanguage(L.first); }
             }
             ImGui::EndMenu();
         }
-
-        ImGui::Separator();
-        if (ImGui::MenuItem(t("menu.settings.skew")))  { if (cb_.onStartSkewCalib) cb_.onStartSkewCalib(); }
-        if (ImGui::MenuItem(t("menu.settings.start"))) { if (cb_.onStartStartPointCalib) cb_.onStartStartPointCalib(); }
-
-        if (ImGui::BeginMenu(t("menu.settings.rpm"))) {
-            struct R { const char* label; float sec; } opts[] = {
-                {"30 RPM", 2.0f}, {"60 RPM", 1.0f}, {"120 RPM", 0.5f},
-                {"240 RPM", 0.25f}, {"480 RPM", 0.125f}
-            };
-            for (auto& o : opts) {
-                if (ImGui::MenuItem(o.label)) {
-                    if (cb_.onSetRpm) cb_.onSetRpm(o.sec);
-                }
-            }
+        
+        if (ImGui::BeginMenu(t("menu.settings.drivers"))) {
+            if (ImGui::MenuItem("Select Device...")) { if (cb_.onSelectAudioDevice) cb_.onSelectAudioDevice(); }
             ImGui::EndMenu();
         }
-
-        ImGui::Separator();
-        if (ImGui::MenuItem(t("menu.settings.manual"))) { if (cb_.onShowManual) cb_.onShowManual(); }
         ImGui::EndMenu();
     }
 
-    if (ImGui::BeginMenu(t("menu.drivers"))) {
-        if (ImGui::MenuItem(t("menu.drivers.reset")))    { if (cb_.onResetAudioDevice) cb_.onResetAudioDevice(); }
-        if (ImGui::MenuItem(t("menu.drivers.settings"))) { if (cb_.onSelectAudioDevice) cb_.onSelectAudioDevice(); }
+    if (ImGui::BeginMenu(t("menu.calib"))) {
+        if (ImGui::BeginMenu(t("menu.calib.global"))) {
+            if (ImGui::MenuItem(t("menu.calib.global.skew"))) { if (cb_.onStartSkewCalib) cb_.onStartSkewCalib(); }
+            if (ImGui::MenuItem(t("menu.calib.global.start"))) { if (cb_.onStartStartPointCalib) cb_.onStartStartPointCalib(); }
+            ImGui::EndMenu();
+        }
+        if (ImGui::MenuItem(t("menu.calib.manual"))) { if (cb_.onShowManual) cb_.onShowManual(); }
         ImGui::EndMenu();
     }
 
     if (ImGui::BeginMenu(t("menu.record"))) {
-        if (ImGui::MenuItem(t("menu.record.open"))) { if (cb_.onOpenRecord) cb_.onOpenRecord(); }
+        if (ImGui::MenuItem(t("menu.record"))) { if (cb_.onOpenRecord) cb_.onOpenRecord(); }
         ImGui::EndMenu();
     }
 
     if (ImGui::BeginMenu(t("menu.about"))) {
-        if (ImGui::MenuItem(t("menu.about.about")))        { if (cb_.onShowAbout) cb_.onShowAbout(); }
         if (ImGui::MenuItem(t("menu.about.check_update"))) { if (cb_.onCheckUpdate) cb_.onCheckUpdate(); }
         ImGui::EndMenu();
     }
 
     ImGui::EndMainMenuBar();
 }
-
 void MainWindow::drawCanvas() {
     ImVec2 avail = ImGui::GetContentRegionAvail();
     ImVec2 p0 = ImGui::GetCursorScreenPos();
@@ -279,22 +260,25 @@ void MainWindow::drawCanvas() {
 
 void MainWindow::drawRightPanel() {
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-    float btn_w = (ImGui::GetContentRegionAvail().x - 16.0f) / 3.0f;
+    float btn_w = (ImGui::GetContentRegionAvail().x - 8.0f) / 2.0f;
     ImVec2 btn_sz(btn_w, 60.0f);
 
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.18f, 0.49f, 0.20f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.13f, 0.37f, 0.16f, 1.0f));
-    if (ImGui::Button(t("btn.start"), btn_sz) && !decoding_) { if (cb_.onStart) cb_.onStart(); }
-    ImGui::PopStyleColor(2);
+    // 根据状态合并 Start / Stop 按钮
+    if (decoding_) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.78f, 0.16f, 0.16f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.56f, 0.00f, 0.00f, 1.0f));
+        if (ImGui::Button(t("btn.stop"), btn_sz)) { if (cb_.onToggleDecode) cb_.onToggleDecode(); }
+        ImGui::PopStyleColor(2);
+    } else {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.49f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.13f, 0.37f, 0.16f, 1.0f));
+        if (ImGui::Button(t("btn.start"), btn_sz)) { if (cb_.onToggleDecode) cb_.onToggleDecode(); }
+        ImGui::PopStyleColor(2);
+    }
+    
     ImGui::SameLine();
 
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.78f, 0.16f, 0.16f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.56f, 0.00f, 0.00f, 1.0f));
-    if (ImGui::Button(t("btn.stop"), btn_sz) && decoding_)  { if (cb_.onStop) cb_.onStop(); }
-    ImGui::PopStyleColor(2);
-    ImGui::SameLine();
-
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.94f, 0.42f, 0.00f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.94f, 0.42f, 0.00f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.75f, 0.21f, 0.05f, 1.0f));
     if (ImGui::Button(t("btn.clear"), btn_sz)) { if (cb_.onClear) cb_.onClear(); }
     ImGui::PopStyleColor(2);
