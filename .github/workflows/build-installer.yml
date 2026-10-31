@@ -1,0 +1,58 @@
+name: Build Windows Installer
+
+on:
+  push:
+    branches: [ test-cpp ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+jobs:
+  build-installer:
+    name: Windows Installer
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-glfw
+            mingw-w64-x86_64-portaudio
+            mingw-w64-x86_64-curl
+            mingw-w64-x86_64-nsis
+
+      - name: Configure and Build
+        run: |
+          cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+
+      - name: Create Installer
+        run: |
+          cd build
+          cpack -G NSIS
+          echo "=== Generated Installer ==="
+          ls -la *.exe
+
+      - name: Upload Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fax-decoder-windows-installer
+          path: build/*.exe
+
+      - name: Upload Installer to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/*.exe
