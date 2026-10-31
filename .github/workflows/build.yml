@@ -71,10 +71,18 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build libglfw3-dev libgl1-mesa-dev portaudio19-dev libcurl4-openssl-dev zip
+          sudo apt-get install -y cmake ninja-build libglfw3-dev libgl1-mesa-dev portaudio19-dev libcurl4-openssl-dev zip imagemagick
 
       - name: Configure and Build
         run: |
+          mkdir -p resources
+          curl -L -o resources/icon.png https://raw.githubusercontent.com/78-HAM/FAX-Decoder-for-PC/main/icon/icon.png
+          if command -v magick &> /dev/null; then
+            magick convert resources/icon.png -define icon:auto-resize=256,128,64,48,32,16 resources/icon.ico
+          elif command -v convert &> /dev/null; then
+            convert resources/icon.png -define icon:auto-resize=256,128,64,48,32,16 resources/icon.ico
+          fi
+          
           cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
           cmake --build build --parallel
 
