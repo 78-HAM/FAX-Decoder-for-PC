@@ -47,6 +47,7 @@ public:
     void setDecoding(bool b) { decoding_ = b; }
     void setHasImage(bool b) { has_image_ = b; }
     void setLineCount(int count, int max) { current_lines_ = count; max_lines_ = max; }
+    void resetView();
     void setHasFile(bool b)   { has_file_ = b; }
     void setFileName(const std::string& f) { file_name_ = f; }
 
