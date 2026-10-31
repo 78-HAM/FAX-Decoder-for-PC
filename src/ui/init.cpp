@@ -259,13 +259,13 @@ void MainWindow::drawCanvas() {
             fg->AddLine(ImVec2(calib_p1.x - S, calib_p1.y), ImVec2(calib_p1.x + S, calib_p1.y), IM_COL32(0, 220, 0, 255), 3.0f);
             fg->AddLine(ImVec2(calib_p1.x, calib_p1.y - S), ImVec2(calib_p1.x, calib_p1.y + S), IM_COL32(0, 220, 0, 255), 3.0f);
             if (calib_mode_ == "SKEW_P2") {
-                fg->AddLine(ImVec2(calib_p2.x - S, calib_p2.y), ImVec2(calib_p2.x + S, calib_p2.y), IM_COLOR(255, 60, 60, 255), 3.0f);
-                fg->AddLine(ImVec2(calib_p2.x, calib_p2.y - S), ImVec2(calib_p2.x, calib_p2.y + S), IM_COLOR(255, 60, 60, 255), 3.0f);
+                fg->AddLine(ImVec2(calib_p2.x - S, calib_p2.y), ImVec2(calib_p2.x + S, calib_p2.y), IM_COL32(255, 60, 60, 255), 3.0f);
+                fg->AddLine(ImVec2(calib_p2.x, calib_p2.y - S), ImVec2(calib_p2.x, calib_p2.y + S), IM_COL32(255, 60, 60, 255), 3.0f);
             }
         } else if (calib_mode_ == "START_POINT") {
             fg->AddLine(ImVec2(calib_start_x, p0.y), ImVec2(calib_start_x, p0.y + avail.y), IM_COL32(255, 235, 59, 255), 2.0f);
         } else if (calib_mode_ == "SPLIT_SELECT") {
-            fg->AddLine(ImVec2(p0.x, calib_split_y), ImVec2(p0.x + avail.x, calib_split_y), IM_COLOR(255, 60, 60, 255), 3.0f);
+            fg->AddLine(ImVec2(p0.x, calib_split_y), ImVec2(p0.x + avail.x, calib_split_y), IM_COL32(255, 60, 60, 255), 3.0f);
         }
     }
 }
@@ -275,7 +275,6 @@ void MainWindow::drawRightPanel() {
     float btn_w = (ImGui::GetContentRegionAvail().x - 8.0f) / 2.0f;
     ImVec2 btn_sz(btn_w, 60.0f);
 
-    // 解码 / 停止 切换按钮
     if (decoding_) {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.78f, 0.16f, 0.16f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.56f, 0.00f, 0.00f, 1.0f));
@@ -297,7 +296,6 @@ void MainWindow::drawRightPanel() {
     ImGui::TextDisabled("Lines: %d / %d", current_lines_, max_lines_);
     ImGui::Spacing();
 
-    // 视图控制按钮
     float ctrl_btn_w = (ImGui::GetContentRegionAvail().x - 24.0f) / 4.0f;
     if (ImGui::Button("+", ImVec2(ctrl_btn_w, 30))) view_scale_ *= 1.2f;
     ImGui::SameLine();
@@ -387,5 +385,426 @@ void MainWindow::drawCalibBar() {
         ImGui::SameLine();
     }
     ImGui::NewLine();
+    ImGui::End();
+}
+
+// ============================================================
+// RecordWindow
+// ============================================================
+void RecordWindow::draw() {
+    if (!visible_) return;
+
+    ImGui::SetNextWindowSize(ImVec2(360, 220), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin(title_.c_str(), &visible_)) { ImGui::End(); return; }
+
+    bool rec = cb_.isRecording ? cb_.isRecording() : false;
+
+    if (rec) {
+        ImGui::TextColored(ImVec4(1.0f, 0.32f, 0.32f, 1.0f), "%s", recording_.c_str());
+    } else {
+        ImGui::TextColored(ImVec4(1.0f, 0.92f, 0.23f, 1.0f), "%s", idle_.c_str());
+    }
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    if (rec) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.78f, 0.16f, 0.16f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.56f, 0.00f, 0.00f, 1.0f));
+        if (ImGui::Button(stop_.c_str(), ImVec2(-1, 40))) {
+            if (cb_.onToggleRecord) cb_.onToggleRecord();
+        }
+        ImGui::PopStyleColor(2);
+    } else {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.49f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.13f, 0.37f, 0.16f, 1.0f));
+        if (ImGui::Button(start_.c_str(), ImVec2(-1, 40))) {
+            if (cb_.onToggleRecord) cb_.onToggleRecord();
+        }
+        ImGui::PopStyleColor(2);
+    }
+
+    ImGui::Spacing();
+    ImGui::TextDisabled("%s", hint_.c_str());
+
+    ImGui::End();
+}
+
+// ============================================================
+// CalibWindow
+// ============================================================
+void CalibWindow::startSkewCalib() {
+    if (!main_) return;
+    if (hooks_.currentLineIndex && hooks_.currentLineIndex() == 0) {
+        if (hooks_.setStatus) hooks_.setStatus("No image data");
+        return;
+    }
+    mode_ = Mode::SKEW_P1;
+    main_->setCalibMode("SKEW_P1");
+    ImVec2 vp = ImGui::GetMainViewport()->WorkSize;
+    main_->calib_p1 = ImVec2(vp.x * 0.5f, vp.y * 0.33f);
+    main_->calib_p2 = main_->calib_p1;
+    _refreshBar();
+}
+
+void CalibWindow::startStartPointCalib() {
+    if (!main_) return;
+    if (hooks_.currentLineIndex && hooks_.currentLineIndex() == 0) {
+        if (hooks_.setStatus) hooks_.setStatus("No image data");
+        return;
+    }
+    mode_ = Mode::START_POINT;
+    main_->setCalibMode("START_POINT");
+    main_->calib_start_x = ImGui::GetMainViewport()->WorkSize.x * 0.5f;
+    _refreshBar();
+}
+
+void CalibWindow::showManualMenu() {
+    if (!main_) return;
+    if (hooks_.currentLineIndex && hooks_.currentLineIndex() == 0) {
+        if (hooks_.setStatus) hooks_.setStatus("No image data");
+        return;
+    }
+    mode_ = Mode::MANUAL_MENU;
+    main_->setCalibMode("MANUAL");
+    _refreshBar();
+}
+
+void CalibWindow::exitCalib() {
+    mode_ = Mode::NONE;
+    if (main_) {
+        main_->setCalibMode("NONE");
+        main_->hideCalibBar();
+    }
+    if (hooks_.setStatus) hooks_.setStatus("Calibration exited");
+}
+
+void CalibWindow::_refreshBar() {
+    if (!main_) return;
+    auto mk = [](const char* label, std::function<void()> cb) {
+        return CalibButton{label, std::move(cb)};
+    };
+
+    switch (mode_) {
+    case Mode::SKEW_P1:
+        main_->showCalibBar("Skew: drag green cross to point 1",
+            { mk("Fine-tune",        [this]() { if (hooks_.openFineTuneSkew) hooks_.openFineTuneSkew(); }),
+              mk("Confirm Point 1",  [this]() { _skewNext(); }),
+              mk("Cancel",           [this]() { exitCalib(); }) });
+        break;
+
+    case Mode::SKEW_P2:
+        main_->showCalibBar("Skew: drag red cross to point 2",
+            { mk("Fine-tune", [this]() { if (hooks_.openFineTuneSkew) hooks_.openFineTuneSkew(); }),
+              mk("Apply",     [this]() { _applySkew(); }),
+              mk("Back",      [this]() { mode_ = Mode::SKEW_P1; _refreshBar(); }) });
+        break;
+
+    case Mode::START_POINT:
+        main_->showCalibBar("Set Start Point: drag yellow line",
+            { mk("Fine-tune",        [this]() { if (hooks_.openFineTuneStart) hooks_.openFineTuneStart(); }),
+              mk("Confirm Position", [this]() { _applyStartPoint(); }),
+              mk("Cancel",           [this]() { exitCalib(); }) });
+        break;
+
+    case Mode::SPLIT_SELECT:
+        main_->showCalibBar("Drag red horizontal line (release to confirm)",
+            { mk("Cancel",  [this]() { showManualMenu(); }),
+              mk("Confirm", [this]() { _finishSplit(); }) });
+        break;
+
+    case Mode::MANUAL_MENU:
+        main_->showCalibBar("Manual Correction: choose action",
+            { mk("1. Set Split",  [this]() { _startManualSplit(); }),
+              mk("2. Set Offset", [this]() { _startManualStart(); }),
+              mk("3. Set Skew",   [this]() { _startManualSkew(); }),
+              mk("4. Apply",      [this]() { _commitManual(); }),
+              mk("Back",          [this]() { exitCalib(); }) });
+        break;
+
+    case Mode::MANUAL_START:
+        main_->showCalibBar("Manual: drag yellow line for lower start",
+            { mk("Fine-tune",        [this]() { if (hooks_.openFineTuneStart) hooks_.openFineTuneStart(); }),
+              mk("Confirm Position", [this]() { _applyStartPoint(); }),
+              mk("Cancel",           [this]() { showManualMenu(); }) });
+        break;
+
+    case Mode::MANUAL_SKEW_P1:
+        main_->showCalibBar("Manual: select point 1",
+            { mk("Fine-tune",       [this]() { if (hooks_.openFineTuneSkew) hooks_.openFineTuneSkew(); }),
+              mk("Confirm Point 1", [this]() { _manualSkewNext(); }),
+              mk("Cancel",          [this]() { showManualMenu(); }) });
+        break;
+
+    case Mode::MANUAL_SKEW_P2:
+        main_->showCalibBar("Manual: select point 2",
+            { mk("Fine-tune", [this]() { if (hooks_.openFineTuneSkew) hooks_.openFineTuneSkew(); }),
+              mk("Apply",     [this]() { _applyManualSkew(); }),
+              mk("Back",      [this]() { _startManualSkew(); }) });
+        break;
+
+    default: break;
+    }
+}
+
+void CalibWindow::_skewNext() {
+    mode_ = Mode::SKEW_P2;
+    if (main_) {
+        main_->setCalibMode("SKEW_P2");
+        if (main_->calib_p2.x == main_->calib_p1.x &&
+            main_->calib_p2.y == main_->calib_p1.y) {
+            main_->calib_p2 = ImVec2(main_->calib_p1.x + 200, main_->calib_p1.y + 200);
+        }
+    }
+    _refreshBar();
+}
+
+void CalibWindow::_applySkew() {
+    if (!main_ || !hooks_.applySkewDelta) { exitCalib(); return; }
+    ImVec2 p1i = main_->canvasToImage(main_->calib_p1);
+    ImVec2 p2i = main_->canvasToImage(main_->calib_p2);
+    float dy = p2i.y - p1i.y;
+    if (std::fabs(dy) < 1.0f) dy = 1.0f;
+    float delta = -(p2i.x - p1i.x) / dy;
+    hooks_.applySkewDelta(delta, p1i.y);
+    exitCalib();
+}
+
+void CalibWindow::_applyStartPoint() {
+    if (!main_) { exitCalib(); return; }
+    if (hooks_.applyStartPoint) {
+        ImVec2 pi = main_->canvasToImage(ImVec2(main_->calib_start_x, 0));
+        hooks_.applyStartPoint(pi.x);
+    }
+    if (mode_ == Mode::MANUAL_START) showManualMenu();
+    else                             exitCalib();
+}
+
+void CalibWindow::_finishSplit() {
+    if (!main_) return;
+    ImVec2 pi = main_->canvasToImage(ImVec2(0, main_->calib_split_y));
+    int line = (int)std::lround(pi.y);
+    if (line < 0) line = 0;
+    if (hooks_.setTempSplitLine) hooks_.setTempSplitLine(line);
+    if (hooks_.setStatus) {
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "Split line: %d", line);
+        hooks_.setStatus(buf);
+    }
+    showManualMenu();
+}
+
+void CalibWindow::_startManualSplit() {
+    mode_ = Mode::SPLIT_SELECT;
+    if (main_) {
+        main_->setCalibMode("SPLIT_SELECT");
+        main_->calib_split_y = ImGui::GetMainViewport()->WorkSize.y * 0.5f;
+    }
+    _refreshBar();
+}
+
+void CalibWindow::_startManualStart() {
+    mode_ = Mode::MANUAL_START;
+    if (main_) {
+        main_->setCalibMode("START_POINT");
+        main_->calib_start_x = ImGui::GetMainViewport()->WorkSize.x * 0.5f;
+    }
+    _refreshBar();
+}
+
+void CalibWindow::_startManualSkew() {
+    mode_ = Mode::MANUAL_SKEW_P1;
+    if (main_) {
+        main_->setCalibMode("SKEW_P1");
+        ImVec2 vp = ImGui::GetMainViewport()->WorkSize;
+        main_->calib_p1 = ImVec2(vp.x * 0.5f, vp.y * 0.33f);
+        main_->calib_p2 = main_->calib_p1;
+    }
+    _refreshBar();
+}
+
+void CalibWindow::_manualSkewNext() {
+    mode_ = Mode::MANUAL_SKEW_P2;
+    if (main_) {
+        main_->setCalibMode("SKEW_P2");
+        if (main_->calib_p2.x == main_->calib_p1.x &&
+            main_->calib_p2.y == main_->calib_p1.y) {
+            main_->calib_p2 = ImVec2(main_->calib_p1.x + 200, main_->calib_p1.y + 200);
+        }
+    }
+    _refreshBar();
+}
+
+void CalibWindow::_applyManualSkew() {
+    if (!main_ || !hooks_.applySkewDelta) { showManualMenu(); return; }
+    ImVec2 p1i = main_->canvasToImage(main_->calib_p1);
+    ImVec2 p2i = main_->canvasToImage(main_->calib_p2);
+    float dy = p2i.y - p1i.y;
+    if (std::fabs(dy) < 1.0f) dy = 1.0f;
+    float delta = -(p2i.x - p1i.x) / dy;
+    hooks_.applySkewDelta(delta, p1i.y);
+    showManualMenu();
+}
+
+void CalibWindow::_commitManual() {
+    if (hooks_.commitManual) hooks_.commitManual();
+    exitCalib();
+}
+
+// ============================================================
+// FineTuneWindow
+// ============================================================
+void FineTuneWindow::open(bool skew_mode, float base_skew, float base_offset, int image_width) {
+    skew_mode_     = skew_mode;
+    base_skew_     = state_skew_   = base_skew;
+    base_offset_   = state_offset_ = base_offset;
+    image_width_   = image_width > 0 ? image_width : 2000;
+    step_          = skew_mode ? 0.01f : 10.0f;
+    manual_input_  = 0.0f;
+    dragging_      = false;
+    visible_       = true;
+}
+
+void FineTuneWindow::close() {
+    visible_ = false;
+    dragging_ = false;
+}
+
+void FineTuneWindow::draw() {
+    if (!visible_) return;
+
+    const char* title = skew_mode_ ? "Fine-tune - Skew" : "Fine-tune - Start Point";
+    ImGui::SetNextWindowSize(ImVec2(1100, 850), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin(title, &visible_)) { ImGui::End(); return; }
+
+    ImVec2 avail = ImGui::GetContentRegionAvail();
+    float bottom_h = 190.0f;
+    float pw = avail.x - 4.0f;
+    float ph = avail.y - bottom_h - 4.0f;
+    if (ph < 100.0f) ph = 100.0f;
+
+    ImVec2 p0 = ImGui::GetCursorScreenPos();
+    ImVec2 p1(p0.x + pw, p0.y + ph);
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(p0, p1, IM_COL32(0, 0, 0, 255));
+    dl->AddRect(p0, p1, IM_COL32(80, 80, 80, 255));
+
+    if (snap_tex_ && snap_w_ > 0 && snap_h_ > 0) {
+        float scale = std::min(pw / (float)snap_w_, ph / (float)snap_h_) * 0.98f;
+        if (scale <= 0.0f) scale = 1.0f;
+        float disp_w = snap_w_ * scale;
+        float disp_h = snap_h_ * scale;
+        float cx = p0.x + pw * 0.5f;
+        float cy = p0.y + ph * 0.5f;
+        ImVec2 i0(cx - disp_w * 0.5f, cy - disp_h * 0.5f);
+
+        preview_origin_ = i0;
+        preview_size_   = ImVec2(disp_w, disp_h);
+        preview_scale_  = scale;
+
+        float dx_total     = (state_offset_ - base_offset_) * scale;
+        float shear_bottom = disp_h * (state_skew_ - base_skew_);
+
+        ImVec2 q1(i0.x + dx_total,                          i0.y);
+        ImVec2 q2(i0.x + dx_total + disp_w,                 i0.y);
+        ImVec2 q3(i0.x + dx_total + disp_w + shear_bottom,  i0.y + disp_h);
+        ImVec2 q4(i0.x + dx_total + shear_bottom,           i0.y + disp_h);
+
+        dl->AddImageQuad(snap_tex_, q1, q2, q3, q4);
+    }
+
+    ImGui::InvisibleButton("##preview", ImVec2(pw, ph));
+
+    if (ImGui::IsItemActivated()) {
+        dragging_    = true;
+        drag_start_  = ImGui::GetIO().MousePos;
+        drag_skew_   = state_skew_;
+        drag_offset_ = state_offset_;
+    }
+    if (dragging_ && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        ImVec2 m = ImGui::GetIO().MousePos;
+        float dx_canvas = m.x - drag_start_.x;
+        float dy_canvas = m.y - drag_start_.y;
+        if (preview_size_.x > 0.0f) {
+            float orig_per_canvas_x = (float)image_width_ / preview_size_.x;
+            state_offset_ = drag_offset_ + dx_canvas * orig_per_canvas_x;
+        }
+        if (skew_mode_ && preview_size_.y > 0.0f) {
+            state_skew_ = drag_skew_ + dy_canvas / preview_size_.y;
+        }
+    }
+    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) dragging_ = false;
+
+    {
+        char info[200];
+        std::snprintf(info, sizeof(info),
+            "skew = %.5f    offset = %.2f\n"
+            "Drag: horizontal=offset (+right / -left), vertical=skew (+down / -up)",
+            state_skew_, state_offset_);
+        dl->AddText(ImVec2(p0.x + 8, p0.y + 8), IM_COL32(255, 235, 59, 255), info);
+    }
+
+    ImGui::SetCursorScreenPos(ImVec2(p0.x, p1.y + 8));
+
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.08f, 0.40f, 0.75f, 1.0f));
+    if (ImGui::Button("<<", ImVec2(64, 38))) {
+        if (skew_mode_) state_skew_   -= step_;
+        else            state_offset_ -= step_;
+    }
+    ImGui::PopStyleColor();
+
+    ImGui::SameLine();
+    ImGui::TextUnformatted("Step:");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(110);
+    ImGui::InputFloat("##step", &step_, 0.0f, 0.0f, "%.5f");
+    ImGui::SameLine();
+
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.08f, 0.40f, 0.75f, 1.0f));
+    if (ImGui::Button(">>", ImVec2(64, 38))) {
+        if (skew_mode_) state_skew_   += step_;
+        else            state_offset_ += step_;
+    }
+    ImGui::PopStyleColor();
+
+    ImGui::Spacing();
+
+    ImGui::TextUnformatted("Manual:");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(170);
+    ImGui::InputFloat("##manual", &manual_input_, 0.0f, 0.0f, "%.5f");
+    ImGui::SameLine();
+    if (ImGui::Button("Apply##manual", ImVec2(100, 28))) {
+        if (skew_mode_) state_skew_   += manual_input_;
+        else            state_offset_ += manual_input_;
+        manual_input_ = 0.0f;
+    }
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    if (ImGui::Button("Reset", ImVec2(130, 34))) {
+        state_skew_   = base_skew_;
+        state_offset_ = base_offset_;
+    }
+
+    float right_align = ImGui::GetWindowWidth() - 320.0f;
+    if (right_align > ImGui::GetCursorPosX()) ImGui::SameLine(right_align);
+
+    if (ImGui::Button("Cancel", ImVec2(130, 34))) {
+        if (cb_.onCancel) cb_.onCancel();
+        visible_ = false;
+    }
+
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.00f, 0.55f, 0.52f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.00f, 0.68f, 0.64f, 1.0f));
+    if (ImGui::Button("Confirm", ImVec2(150, 34))) {
+        if (cb_.onApply) cb_.onApply(state_skew_, state_offset_);
+        visible_ = false;
+    }
+    ImGui::PopStyleColor(2);
+
     ImGui::End();
 }
