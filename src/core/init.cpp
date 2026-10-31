@@ -992,7 +992,7 @@ void App::_drawModalSaveRecord() {
             main_win_.setHasFile(true);
             // 只取文件名
             std::string name = current_file_;
-            auto slash = name.find_last_of("/\\");
+            auto slash = name.find_last_of("\\/");
             if (slash != std::string::npos) name = name.substr(slash + 1);
             main_win_.setFileName(name);
             setStatus(std::string(i18n_.t("status.loading_file")) + ": " + name);
@@ -1020,7 +1020,7 @@ void App::_drawFileDialog() {
             has_file_ = true;
             main_win_.setHasFile(true);
             std::string name = current_file_;
-            auto slash = name.find_last_of("/\");
+            auto slash = name.find_last_of("\\/");
             if (slash != std::string::npos) name = name.substr(slash + 1);
             main_win_.setFileName(name);
             setStatus(std::string(i18n_.t("status.loading_file")) + ": " + name);
