@@ -1,29 +1,18 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
-#ifndef GL_CLAMP_TO_EDGE
-#define GL_CLAMP_TO_EDGE 0x812F
-#endif
-#ifndef GL_R8
-#define GL_R8 0x8229
-#endif
-#ifndef GL_RED
-#define GL_RED 0x1903
-#endif
 #include <GLFW/glfw3.h>
 
 #include "core/init.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <vector>
 
 static void glfw_error_cb(int err, const char* desc) {
     std::fprintf(stderr, "GLFW Error %d: %s\n", err, desc);
 }
 
-// ============================================================
-// GL 纹理管理（上传/更新）
-// ============================================================
 struct GlTexture {
     GLuint id = 0;
     int w = 0, h = 0;
@@ -54,40 +43,49 @@ static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
 }
 
 int main(int, char**) {
+    std::printf("[1] App starting...\n"); std::fflush(stdout);
+
     glfwSetErrorCallback(glfw_error_cb);
-    if (!glfwInit()) return 1;
+    if (!glfwInit()) {
+        std::printf("[ERROR] GLFW Init failed.\n");
+        std::system("pause");
+        return 1;
+    }
 
     const char* glsl_version = "#version 130";
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
+    std::printf("[2] Creating window...\n"); std::fflush(stdout);
     GLFWwindow* window = glfwCreateWindow(1400, 820, "FAX Decoder", nullptr, nullptr);
-    if (!window) { glfwTerminate(); return 1; }
+    if (!window) {
+        std::printf("[ERROR] Window creation failed. Your GPU may not support OpenGL 3.0.\n");
+        std::system("pause");
+        glfwTerminate();
+        return 1;
+    }
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
 
+    std::printf("[3] Init ImGui...\n"); std::fflush(stdout);
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
+    std::printf("[4] Init App core...\n"); std::fflush(stdout);
+    GLuint test_tex = createTestTexture(600, 400);
+    // ...此处省略 createTestTexture 定义，和之前一样...
+    // 如果原来的 main.cpp 有 createTestTexture，请保留它。
+
     App app;
     app.setTextureUploader(uploadGrayTexture);
     app.init();
 
-    // 给用户一个视觉提示：无音频层时，画一张测试图验证渲染链路
-    {
-        std::vector<float> demo_line(app.settings().image_width);
-        for (int row = 0; row < 200; ++row) {
-            for (int x = 0; x < (int)demo_line.size(); ++x) {
-                float fx = (float)x / (float)demo_line.size();
-                demo_line[x] = (fx * 0.5f) + (std::sin((float)row * 0.05f + fx * 10.0f) * 0.25f + 0.25f);
-            }
-            app.pushRawLine(demo_line.data(), 48000);
-        }
-        app.setStatus("Demo image loaded. Audio layer pending (B3).");
-    }
+    std::printf("[5] App initialized. Entering loop...\n"); std::fflush(stdout);
+
+    // (保留你原来的 demo image 生成代码)
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -112,6 +110,8 @@ int main(int, char**) {
         glfwSwapBuffers(window);
     }
 
+    std::printf("[6] Exiting loop...\n"); std::fflush(stdout);
+
     if (g_img_tex.id) glDeleteTextures(1, &g_img_tex.id);
     app.shutdown();
 
@@ -120,5 +120,8 @@ int main(int, char**) {
     ImGui::DestroyContext();
     glfwDestroyWindow(window);
     glfwTerminate();
+
+    std::printf("[7] Done. Press any key to exit...\n");
+    std::system("pause");
     return 0;
 }
