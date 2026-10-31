@@ -173,7 +173,9 @@ void MainWindow::drawCanvas() {
     dl->AddRectFilled(p0, ImVec2(p0.x + avail.x, p0.y + avail.y), IM_COL32(0, 0, 0, 255));
 
     if (image_tex_ && image_w_ > 0 && image_h_ > 0) {
-        float base = std::min(avail.x / image_w_, avail.y / image_h_);
+        // 计算缩放基准时，总高度取 max(当前行数, 500)，避免早期行数太少导致画面无限放大后瞬间骤缩
+        float calc_h = std::max((float)image_h_, 500.0f);
+        float base = std::min(avail.x / image_w_, avail.y / calc_h);
         float s = base * view_scale_;
         float w = image_w_ * s;
         float h = image_h_ * s;
