@@ -11,7 +11,6 @@ struct SyncSegment {
 };
 
 struct AppSettings {
-    // 修复：统一使用小写短横线格式
     std::string language            = "zh-cn"; 
     int   image_width               = 2000;
     float seconds_per_line          = 0.5f;
@@ -22,7 +21,6 @@ struct AppSettings {
     float skew_factor               = 0.0f;
     float global_x_offset           = 0.0f;
     int   selected_audio_device     = -1;
-    // 优化：降到 2000 行，节省大量内存，同时完全够用
     int   max_lines                 = 2000; 
 };
 
@@ -45,6 +43,7 @@ public:
     void drawLineDirect(const float* line, int row,
                         float skew, float offset, bool binary_mode);
     void reprocessAll(bool binary_mode);
+    void rebuildFromRaw(bool binary_mode); // 补全的声明
 
     const uint8_t* data() const { return pixels_.data(); }
     uint8_t*       data()       { return pixels_.data(); }
@@ -61,16 +60,15 @@ public:
     const std::vector<SyncSegment>& segments() const { return segments_; }
     SyncSegment segmentForLine(int line) const;
 
-    // 返回引用，调用方必须通过 mutex() 加锁
     const std::vector<std::vector<float>>& rawLines() const { return raw_lines_; }
     std::vector<std::vector<float>>&       rawLines()       { return raw_lines_; }
 
-    // 注意：暴露内部互斥锁供 App 层控制线程安全
     std::mutex& mutex() { return mutex_; }
 
 private:
     void _drawLineNoLock(const float* line, int row,
                          float skew, float offset, bool binary_mode);
+    SyncSegment _segmentForLineNoLock(int line) const; // 补全的声明
 
     int width_ = 2000;
     int max_lines_ = 2000;

@@ -91,7 +91,7 @@ bool SettingsIO::save(const std::string& path, const AppSettings& in) {
 // ============================================================
 // ImageBuffer
 // ============================================================
-ImageBuffer::ImageBuffer() { init(2000, 2000); } // 统一与头文件默认值一致
+ImageBuffer::ImageBuffer() { init(2000, 2000); }
 
 void ImageBuffer::init(int width, int max_lines) {
     std::lock_guard<std::mutex> lk(mutex_);
@@ -182,7 +182,7 @@ void ImageBuffer::pushLine(const float* line, int width, bool binary_mode) {
     std::lock_guard<std::mutex> lk(mutex_);
     int row = current_lines_;
     if (row >= max_lines_) return;
-    SyncSegment seg = _segmentForLineNoLock(row); // 注意：这里改为了 NoLock
+    SyncSegment seg = _segmentForLineNoLock(row);
     _drawLineNoLock(line, row, seg.skew, seg.offset, binary_mode);
     raw_lines_.emplace_back(line, line + width);
     current_lines_ = row + 1;
@@ -191,7 +191,7 @@ void ImageBuffer::pushLine(const float* line, int width, bool binary_mode) {
 void ImageBuffer::reprocessAll(bool binary_mode) {
     std::lock_guard<std::mutex> lk(mutex_);
     for (int row = 0; row < current_lines_; ++row) {
-        SyncSegment seg = _segmentForLineNoLock(row); // 注意：这里改为了 NoLock
+        SyncSegment seg = _segmentForLineNoLock(row);
         _drawLineNoLock(raw_lines_[row].data(), row, seg.skew, seg.offset, binary_mode);
     }
 }
