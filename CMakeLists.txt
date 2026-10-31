@@ -1,8 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
 project(fax_decoder LANGUAGES CXX C)
-if(WIN32)
-    enable_language(RC)
-endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,6 +8,14 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# Windows 平台专属：启用 RC 资源编译器以支持 exe 图标
+if(WIN32)
+    enable_language(RC)
+endif()
+
+# ==========================================
+# 依赖查找
+# ==========================================
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLFW glfw3)
 if(NOT GLFW_FOUND)
@@ -25,7 +30,9 @@ find_package(CURL REQUIRED)
 find_package(Threads REQUIRED)
 find_package(OpenGL QUIET)
 
-# ---------------- ImGui ----------------
+# ==========================================
+# ImGui 库
+# ==========================================
 set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/third_party/imgui)
 add_library(imgui STATIC
     ${IMGUI_DIR}/imgui.cpp
@@ -39,11 +46,12 @@ target_include_directories(imgui PUBLIC
     ${IMGUI_DIR} ${IMGUI_DIR}/backends ${GLFW_INCLUDE_DIRS})
 target_link_libraries(imgui PUBLIC ${GLFW_LIBRARIES} Threads::Threads)
 
-# ---------------- ImGuiFileDialog（可选） ----------------
+# ==========================================
+# ImGuiFileDialog 库 (可选)
+# ==========================================
 set(IFD_DIR ${CMAKE_SOURCE_DIR}/third_party/ImGuiFileDialog)
 if(EXISTS ${IFD_DIR}/ImGuiFileDialog.cpp AND EXISTS ${IFD_DIR}/ImGuiFileDialog.h)
     add_library(imgui_filedialog STATIC ${IFD_DIR}/ImGuiFileDialog.cpp)
-    # ★ 这里补上了 third_party 和 third_party/dirent，解决 Windows 找不到 dirent.h 的问题
     target_include_directories(imgui_filedialog PUBLIC 
         ${IFD_DIR} 
         ${IMGUI_DIR} 
@@ -60,10 +68,14 @@ else()
     set(HAVE_IFD FALSE)
 endif()
 
-# ---------------- App ----------------
+# ==========================================
+# 主程序编译
+# ==========================================
 file(GLOB_RECURSE APP_SRC CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/*.cpp)
+
 if(WIN32)
-    add_executable(fax_decoder ${APP_SRC} resources/app.rc)
+    # Windows 下附带 app.rc 以显示图标
+    add_executable(fax_decoder ${APP_SRC} ${CMAKE_SOURCE_DIR}/resources/app.rc)
 else()
     add_executable(fax_decoder ${APP_SRC})
 endif()
@@ -78,6 +90,7 @@ target_include_directories(fax_decoder PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party/kissfft
     ${GLFW_INCLUDE_DIRS}
 )
+
 if(WIN32)
     target_include_directories(fax_decoder PRIVATE ${CMAKE_SOURCE_DIR}/third_party/dirent)
 endif()
@@ -102,23 +115,36 @@ else()
     target_link_libraries(fax_decoder PRIVATE GL)
 endif()
 
+# 添加第三方 C 语言源码
 target_sources(fax_decoder PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party/inih/ini.c
     ${CMAKE_SOURCE_DIR}/third_party/kissfft/kiss_fft.c
     ${CMAKE_SOURCE_DIR}/third_party/kissfft/kiss_fftr.c
 )
 
-# ======== CPack 打包 (Windows NSIS 安装包) ========
+# ==========================================
+# 安装与打包 (CPack)
+# ==========================================
+install(TARGETS fax_decoder RUNTIME DESTINATION .)
+
 if(WIN32)
     set(CPACK_GENERATOR "NSIS")
     set(CPACK_PACKAGE_NAME "FAXDecoder")
     set(CPACK_PACKAGE_VENDOR "78-HAM")
     set(CPACK_PACKAGE_VERSION "2.0.0")
-    set(CPACK_NSIS_DISPLAY_NAME "FAX Decoder 2.0")
-    set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/resources/icon.ico") # 如果有图标
-    set(CPACK_NSIS_CREATE_ICONS_EXTRA "CreateShortCut '$SMPROGRAMS\\\\FAX Decoder.lnk' '$INSTDIR\\\\fax_decoder.exe'")
-    # 桌面快捷方式可选逻辑 (NSIS 默认不支持容易勾选，先默认创建)
-    set(CPACK_NSIS_CREATE_ICONS_EXTRA "${CPACK_NSIS_CREATE_ICONS_EXTRA} CreateShortCut '$DESKTOP\\\\FAX Decoder.lnk' '$INSTDIR\\\\fax_decoder.exe'")
+    set(CPACK_PACKAGE_INSTALL_DIRECTORY "FAXDecoder")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "FAX Decoder 2.0")
     
+    set(CPACK_NSIS_DISPLAY_NAME "FAX Decoder 2.0")
+    set(CPACK_NSIS_PACKAGE_NAME "FAX Decoder 2.0")
+    
+    # 自动创建快捷方式
+    set(CPACK_CREATE_DESKTOP_LINKS "fax_decoder")
+    set(CPACK_NSIS_MENU_LINKS "fax_decoder.exe" "FAX Decoder")
+    
+    # 安装包图标
+    set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/resources/icon.ico")
+    set(CPACK_NSIS_MUI_UNIICON "${CMAKE_SOURCE_DIR}/resources/icon.ico")
+
     include(CPack)
 endif()
