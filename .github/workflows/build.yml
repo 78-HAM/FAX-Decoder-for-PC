@@ -1,0 +1,91 @@
+name: Build All Platforms
+
+on:
+  push:
+    branches: [ test-cpp ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.os }} - ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            arch: x86_64
+          - os: windows-2019
+            arch: x86_64-xp # 尝试兼容 XP/老系统
+          - os: windows-11-arm
+            arch: arm64
+          - os: ubuntu-latest
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+          - os: macos-14
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      # 环境准备 (根据平台)
+      - name: Setup MSYS2 (Windows)
+        if: startsWith(matrix.os, 'windows')
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-glfw mingw-w64-x86_64-portaudio mingw-w64-x86_64-curl
+
+      - name: Setup Linux Deps
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build libglfw3-dev libgl1-mesa-dev portaudio19-dev libcurl4-openssl-dev
+
+      - name: Setup Mac Deps
+        if: startsWith(matrix.os, 'macos')
+        run: brew install cmake ninja glfw portaudio curl
+
+      # 编译
+      - name: Configure
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os }}" == *"windows"* ]]; then
+            cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+          else
+            cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+          fi
+
+      - name: Build
+        shell: bash
+        run: cmake --build build --parallel
+
+      # 打包收集
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [[ "${{ matrix.os }}" == *"windows"* ]]; then
+            cp build/bin/*.exe dist/ || cp build/*.exe dist/
+            if [ -d "fount" ]; then cp -r fount dist/; fi
+            ldd dist/*.exe | awk '/=>/ {print $3}' | grep -i "mingw64" | while read dll; do cp "$dll" dist/; done
+            cd build && cpack -G NSIS && cp *.exe ../dist/ && cd ..
+            cd dist && zip -9 ../fax-decoder-${{ matrix.os }}-${{ matrix.arch }}.zip *
+          elif [[ "${{ matrix.os }}" == *"ubuntu"* ]]; then
+            cp build/bin/* dist/ || cp build/fax_decoder dist/
+            if [ -d "fount" ]; then cp -r fount dist/; fi
+            cd dist && zip -9 ../fax-decoder-linux-${{ matrix.arch }}.zip *
+          elif [[ "${{ matrix.os }}" == *"macos"* ]]; then
+            cp build/bin/* dist/ || cp build/fax_decoder dist/
+            if [ -d "fount" ]; then cp -r fount dist/; fi
+            cd dist && zip -9 ../fax-decoder-macos-${{ matrix.arch }}.zip *
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fax-decoder-${{ matrix.os }}-${{ matrix.arch }}
+          path: fax-decoder-*.zip

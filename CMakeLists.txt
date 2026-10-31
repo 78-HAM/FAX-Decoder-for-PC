@@ -95,3 +95,18 @@ target_sources(fax_decoder PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party/kissfft/kiss_fft.c
     ${CMAKE_SOURCE_DIR}/third_party/kissfft/kiss_fftr.c
 )
+
+# ======== CPack 打包 (Windows NSIS 安装包) ========
+if(WIN32)
+    set(CPACK_GENERATOR "NSIS")
+    set(CPACK_PACKAGE_NAME "FAXDecoder")
+    set(CPACK_PACKAGE_VENDOR "78-HAM")
+    set(CPACK_PACKAGE_VERSION "2.0.0")
+    set(CPACK_NSIS_DISPLAY_NAME "FAX Decoder 2.0")
+    set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/resources/icon.ico") # 如果有图标
+    set(CPACK_NSIS_CREATE_ICONS_EXTRA "CreateShortCut '$SMPROGRAMS\\\\FAX Decoder.lnk' '$INSTDIR\\\\fax_decoder.exe'")
+    # 桌面快捷方式可选逻辑 (NSIS 默认不支持容易勾选，先默认创建)
+    set(CPACK_NSIS_CREATE_ICONS_EXTRA "${CPACK_NSIS_CREATE_ICONS_EXTRA} CreateShortCut '$DESKTOP\\\\FAX Decoder.lnk' '$INSTDIR\\\\fax_decoder.exe'")
+    
+    include(CPack)
+endif()
