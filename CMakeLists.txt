@@ -45,8 +45,10 @@ if(EXISTS ${IFD_DIR}/ImGuiFileDialog.cpp AND EXISTS ${IFD_DIR}/ImGuiFileDialog.h
         ${IFD_DIR} 
         ${IMGUI_DIR} 
         ${CMAKE_SOURCE_DIR}/third_party
-        ${CMAKE_SOURCE_DIR}/third_party/dirent
     )
+    if(WIN32)
+        target_include_directories(imgui_filedialog PUBLIC ${CMAKE_SOURCE_DIR}/third_party/dirent)
+    endif()
     target_link_libraries(imgui_filedialog PUBLIC imgui)
     message(STATUS "ImGuiFileDialog: ENABLED")
     set(HAVE_IFD TRUE)
@@ -67,9 +69,12 @@ target_include_directories(fax_decoder PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party/inih
     ${CMAKE_SOURCE_DIR}/third_party/json
     ${CMAKE_SOURCE_DIR}/third_party/kissfft
-    ${CMAKE_SOURCE_DIR}/third_party/dirent
     ${GLFW_INCLUDE_DIRS}
 )
+if(WIN32)
+    target_include_directories(fax_decoder PRIVATE ${CMAKE_SOURCE_DIR}/third_party/dirent)
+endif()
+
 target_link_libraries(fax_decoder PRIVATE
     imgui ${GLFW_LIBRARIES} Threads::Threads CURL::libcurl)
 
