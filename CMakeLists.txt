@@ -9,7 +9,14 @@ endif()
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GLFW REQUIRED glfw3)
+pkg_check_modules(GLFW glfw3)
+if(NOT GLFW_FOUND)
+    pkg_check_modules(GLFW glfw)
+endif()
+if(NOT GLFW_FOUND)
+    message(FATAL_ERROR "GLFW not found (tried glfw3 and glfw)")
+endif()
+
 pkg_check_modules(PORTAUDIO portaudio-2.0)
 find_package(CURL REQUIRED)
 find_package(Threads REQUIRED)
@@ -33,7 +40,13 @@ target_link_libraries(imgui PUBLIC ${GLFW_LIBRARIES} Threads::Threads)
 set(IFD_DIR ${CMAKE_SOURCE_DIR}/third_party/ImGuiFileDialog)
 if(EXISTS ${IFD_DIR}/ImGuiFileDialog.cpp AND EXISTS ${IFD_DIR}/ImGuiFileDialog.h)
     add_library(imgui_filedialog STATIC ${IFD_DIR}/ImGuiFileDialog.cpp)
-    target_include_directories(imgui_filedialog PUBLIC ${IFD_DIR} ${IMGUI_DIR})
+    # ★ 这里补上了 third_party 和 third_party/dirent，解决 Windows 找不到 dirent.h 的问题
+    target_include_directories(imgui_filedialog PUBLIC 
+        ${IFD_DIR} 
+        ${IMGUI_DIR} 
+        ${CMAKE_SOURCE_DIR}/third_party
+        ${CMAKE_SOURCE_DIR}/third_party/dirent
+    )
     target_link_libraries(imgui_filedialog PUBLIC imgui)
     message(STATUS "ImGuiFileDialog: ENABLED")
     set(HAVE_IFD TRUE)
@@ -54,6 +67,7 @@ target_include_directories(fax_decoder PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party/inih
     ${CMAKE_SOURCE_DIR}/third_party/json
     ${CMAKE_SOURCE_DIR}/third_party/kissfft
+    ${CMAKE_SOURCE_DIR}/third_party/dirent
     ${GLFW_INCLUDE_DIRS}
 )
 target_link_libraries(fax_decoder PRIVATE
