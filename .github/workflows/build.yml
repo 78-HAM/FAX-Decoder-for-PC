@@ -51,11 +51,21 @@ jobs:
             mingw-w64-${{ matrix.arch }}-cmake
             mingw-w64-${{ matrix.arch }}-ninja
             mingw-w64-${{ matrix.arch }}-pkgconf
-            mingw-w64-${{ matrix.arch }}-glfw
             mingw-w64-${{ matrix.arch }}-portaudio
             mingw-w64-${{ matrix.arch }}-curl
-            mingw-w64-${{ matrix.arch }}-nsis
             zip
+            ${{ matrix.arch == 'x86_64' && 'mingw-w64-x86_64-glfw mingw-w64-x86_64-nsis' || 'mingw-w64-x86_64-nsis' }}
+
+      # 专门为 32 位 Windows 手动编译 GLFW
+      - name: Build GLFW for x86
+        if: startsWith(matrix.os, 'windows') && matrix.arch == 'i686'
+        run: |
+          git clone --depth 1 --branch 3.3.9 https://github.com/glfw/glfw.git
+          cd glfw
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_TESTS=OFF -DGLFW_BUILD_DOCS=OFF -DCMAKE_INSTALL_PREFIX=/mingw32
+          cmake --build build --parallel
+          cmake --install build
+          cd ..
 
       - name: Setup Linux Deps
         if: startsWith(matrix.os, 'ubuntu')
@@ -78,7 +88,7 @@ jobs:
           # 抓取 mingw 运行库 DLL
           ldd dist/*.exe | awk '/=>/ {print $3}' | grep -i "mingw" | while read dll; do cp "$dll" dist/; done
           
-          # 生成 NSIS 安装包
+          # 生成 NSIS 安装包 (使用 64 位 nsis 打包)
           cd build
           cpack -G NSIS
           cp *.exe ../dist/ || true
@@ -103,7 +113,6 @@ jobs:
           name: fax-decoder-${{ matrix.name }}
           path: fax-decoder-*.zip
 
-      # 如果推送了 Tag，自动发布到该 Tag 的 Release 页面
       - name: Upload to Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
