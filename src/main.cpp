@@ -51,7 +51,10 @@ static GlTexture g_img_tex;
 
 static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
     if (!pixels || w <= 0 || h <= 0) return (ImTextureID)0;
-    std::vector<uint8_t> rgba(w * h * 4);
+    static std::vector<uint8_t> rgba;
+    if (rgba.size() < (size_t)w * h * 4) {
+        rgba.resize((size_t)w * h * 4);
+    }
     for (int i = 0; i < w * h; ++i) {
         rgba[i * 4 + 0] = pixels[i];
         rgba[i * 4 + 1] = pixels[i];

@@ -192,7 +192,7 @@ void PortAudioInput::stop() {
 void PortAudioInput::pushSamples(const float* data, int n) {
     if (!data || n <= 0) return;
     std::lock_guard<std::mutex> lk(buf_mutex_);
-    if (buf_queue_.size() > 64) buf_queue_.pop_front();
+    if (buf_queue_.size() > 500) buf_queue_.pop_front(); // 增大到 500 防丢帧
     buf_queue_.emplace_back(data, data + n);
     buf_cv_.notify_one();
 }

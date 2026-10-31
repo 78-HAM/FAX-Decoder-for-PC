@@ -180,7 +180,7 @@ void MainWindow::drawCanvas() {
 
     if (image_tex_ && image_w_ > 0 && image_h_ > 0) {
         // 初始倍数优化：将虚拟高度基准从 500 降到 150，直接放大画面
-        float calc_h = std::max((float)image_h_, 150.0f);
+        float calc_h = std::max((float)image_h_, 250.0f);
         float base = std::min(avail.x / image_w_, avail.y / calc_h);
         float s = base * view_scale_;
         float w = image_w_ * s;
