@@ -36,6 +36,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 拉取所有历史，方便获取最新的 Tag
 
       - name: Setup MSYS2 (Windows)
         if: startsWith(matrix.os, 'windows')
@@ -87,8 +89,21 @@ jobs:
           name: fax-decoder-${{ matrix.name }}
           path: fax-decoder-*.zip
 
+      # 动态获取最新的 Tag
+      - name: Get Latest Tag
+        id: get_tag
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            # 获取仓库最新的 tag 名
+            TAG=$(git describe --tags `git rev-list --tags --max-count=1` 2>/dev/null || echo "2.0.0")
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+          fi
+
+      # 只要编译成功，强制上传到最新 Tag 的 Release
       - name: Upload to Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.get_tag.outputs.tag }}
           files: fax-decoder-*.zip

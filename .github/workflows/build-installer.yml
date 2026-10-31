@@ -17,6 +17,8 @@ jobs:
         shell: msys2 {0}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 拉取所有历史
 
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
@@ -40,15 +42,12 @@ jobs:
 
       - name: Create Installer
         run: |
-          # 准备安装素材目录
           mkdir -p build/dist
           cp build/bin/*.exe build/dist/ 2>/dev/null || cp build/*.exe build/dist/ 2>/dev/null || true
           if [ -d "resources" ]; then cp -r resources build/dist/; fi
           
-          # 强制收集依赖 DLL
           ldd build/dist/*.exe 2>/dev/null | awk '/=>/ {print $3}' | grep -i "mingw" | while read dll; do cp "$dll" build/dist/ 2>/dev/null; done || true
           
-          # 让 CPack 将 build/dist 目录打包成安装程序
           cd build
           cpack -G NSIS
           echo "=== Generated Installer Size ==="
@@ -60,8 +59,21 @@ jobs:
           name: fax-decoder-windows-installer
           path: build/*.exe
 
+      # 动态获取最新的 Tag
+      - name: Get Latest Tag
+        id: get_tag
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            # 获取仓库最新的 tag 名
+            TAG=$(git describe --tags `git rev-list --tags --max-count=1` 2>/dev/null || echo "2.0.0")
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+          fi
+
+      # 只要编译成功，强制上传到最新 Tag 的 Release
       - name: Upload Installer to Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.get_tag.outputs.tag }}
           files: build/*.exe
