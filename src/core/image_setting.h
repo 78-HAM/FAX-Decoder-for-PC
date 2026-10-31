@@ -11,7 +11,8 @@ struct SyncSegment {
 };
 
 struct AppSettings {
-    std::string language            = "zh_CN";
+    // 修复：统一使用小写短横线格式
+    std::string language            = "zh-cn"; 
     int   image_width               = 2000;
     float seconds_per_line          = 0.5f;
     float contrast                  = 1.1f;
@@ -21,7 +22,8 @@ struct AppSettings {
     float skew_factor               = 0.0f;
     float global_x_offset           = 0.0f;
     int   selected_audio_device     = -1;
-    int   max_lines                 = 10000;
+    // 优化：降到 2000 行，节省大量内存，同时完全够用
+    int   max_lines                 = 2000; 
 };
 
 class SettingsIO {
@@ -59,10 +61,11 @@ public:
     const std::vector<SyncSegment>& segments() const { return segments_; }
     SyncSegment segmentForLine(int line) const;
 
+    // 返回引用，调用方必须通过 mutex() 加锁
     const std::vector<std::vector<float>>& rawLines() const { return raw_lines_; }
     std::vector<std::vector<float>>&       rawLines()       { return raw_lines_; }
-    void rebuildFromRaw(bool binary_mode);
 
+    // 注意：暴露内部互斥锁供 App 层控制线程安全
     std::mutex& mutex() { return mutex_; }
 
 private:
@@ -70,7 +73,7 @@ private:
                          float skew, float offset, bool binary_mode);
 
     int width_ = 2000;
-    int max_lines_ = 10000;
+    int max_lines_ = 2000;
     int current_lines_ = 0;
 
     std::vector<uint8_t> pixels_;

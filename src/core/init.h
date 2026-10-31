@@ -71,9 +71,7 @@ private:
         MODAL_CONTRAST,
         MODAL_ABOUT,
         MODAL_UPDATE,
-        MODAL_AUDIO_DEV,
-        MODAL_SAVE_RECORD,
-        MODAL_MANUAL_SPLIT,
+        MODAL_AUDIO_DEV
     };
 
     void _bindCallbacks();
@@ -122,8 +120,6 @@ private:
     void _drawModalAbout();
     void _drawModalUpdate();
     void _drawModalAudioDev();
-    void _drawModalSaveRecord();
-    void _drawFileDialog();
 
     State  state_ = State::IDLE;
     bool   recording_ = false;
@@ -146,8 +142,6 @@ private:
     RecordWindow   rec_win_;
     CalibWindow    calib_win_;
     FineTuneWindow fine_win_;
-
-    float spectrum_bars_[128] = {};
 
     bool  is_manual_ = false;
     float temp_skew_ = 0.0f;
@@ -185,13 +179,10 @@ private:
 
     ModalId modal_id_ = MODAL_NONE;
     bool modal_need_open_ = false;
-    char modal_buf_[512] = {};
     int modal_int_ = 0;
     float modal_float_ = 0.0f;
     bool modal_bool_ = false;
     std::string modal_text_;
     std::vector<std::pair<int, std::string>> modal_devices_;
     int modal_selected_device_ = -1;
-
-    bool file_dialog_open_ = false;
 };

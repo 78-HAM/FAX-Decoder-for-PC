@@ -1,9 +1,6 @@
 #include "core/init.h"
 #include "util/ImageIO.h"
 #include "util/NativeFileDialog.h"
-#ifdef HAVE_IMGUI_FILE_DIALOG
-#include "ImGuiFileDialog.h"
-#endif
 
 #include <unordered_map>
 #include <algorithm>
@@ -120,6 +117,11 @@ void App::init() {
     main_win_.setHasFile(false);
     main_win_.setHasImage(false);
     image_dirty_ = false;
+
+    // 强制清空一次，确保启动绝对干净
+    image_.clear();
+    spectrum_->reset();
+    main_win_.clearImageTexture();
 }
 
 void App::shutdown() {
@@ -147,7 +149,6 @@ void App::update() {
     fine_win_.draw();
     rec_win_.draw();
 
-    _drawFileDialog();
     _drawModals();
 }
 
@@ -165,6 +166,9 @@ void App::_audioInputCallback(const float* samples, int n, int sr) {
     }
 
     std::lock_guard<std::mutex> lk_acc(line_acc_mutex_);
+    // 安全拦截：防止在停止解码瞬间空指针解引用
+    if (!input_resampler_) return; 
+    
     input_resampler_->put(samples, n);
 
     std::vector<float> out_buf(n * 2 + 64);
@@ -346,7 +350,7 @@ void App::_bindCallbacks() {
     cb.onShowManual       = [this]() { _onShowManual(); };
     cb.onLoadFont         = [this]() { _onLoadFont(); };
     cb.onToggleFullscreen = [this]() { _onToggleFullscreen(); };
-    cb.onResetView = [this]() { main_win_.resetView(); };
+    cb.onResetView        = [this]() { main_win_.resetView(); };
     cb.onSetTheme         = [this](bool l) { _onSetTheme(l); };
     cb.getSpectrum        = [this](float* out, int n) { _updateSpectrumBars(out, n); };
 
@@ -485,6 +489,8 @@ void App::_onStart() {
         return;
     }
 
+    audio_input_.stop(); // 确保没有遗留进程
+
     {
         std::lock_guard<std::mutex> lk(line_acc_mutex_);
         input_resampler_.reset(new Resampler(48000, TARGET_SAMPLE_RATE));
@@ -616,8 +622,7 @@ void App::_onSaveImage() {
     char filename[256];
     std::time_t now = std::time(nullptr);
     std::tm* tm = std::localtime(&now);
-    std::strftime(filename, sizeof(filename),
-                  "/FAX_%Y%m%d_%H%M%S.png", tm);
+    std::strftime(filename, sizeof(filename), "/FAX_%Y%m%d_%H%M%S.png", tm);
 
     std::string path = std::string(home) + filename;
     std::string err = ImageIO::saveByExtension(path, snap.data(), w, h);
@@ -774,7 +779,6 @@ void App::_drawModals() {
             case MODAL_ABOUT:      ImGui::OpenPopup("##about_modal"); break;
             case MODAL_UPDATE:     ImGui::OpenPopup("##update_modal"); break;
             case MODAL_AUDIO_DEV:  ImGui::OpenPopup("##audio_dev_modal"); break;
-            case MODAL_SAVE_RECORD: ImGui::OpenPopup("##text_modal"); break;
             default: break;
         }
         modal_need_open_ = false;
@@ -786,7 +790,6 @@ void App::_drawModals() {
     if (modal_id_ == MODAL_ABOUT)      _drawModalAbout();
     if (modal_id_ == MODAL_UPDATE)     _drawModalUpdate();
     if (modal_id_ == MODAL_AUDIO_DEV)  _drawModalAudioDev();
-    if (modal_id_ == MODAL_SAVE_RECORD) _drawModalSaveRecord();
 }
 
 void App::_drawModalSpectrum() {
@@ -953,53 +956,4 @@ void App::_drawModalAudioDev() {
         ImGui::CloseCurrentPopup();
     }
     ImGui::EndPopup();
-}
-
-void App::_drawModalSaveRecord() {
-    if (!ImGui::BeginPopupModal("##text_modal", nullptr,
-                                ImGuiWindowFlags_AlwaysAutoResize)) return;
-    ImGui::TextUnformatted("Enter audio file path:");
-    ImGui::SetNextItemWidth(500);
-    ImGui::InputText("##path", modal_buf_, sizeof(modal_buf_));
-    if (ImGui::Button("OK", ImVec2(110, 0))) {
-        if (modal_buf_[0]) {
-            current_file_ = modal_buf_;
-            has_file_ = true;
-            main_win_.setHasFile(true);
-            std::string name = current_file_;
-            auto slash = name.find_last_of("/\\");
-            if (slash != std::string::npos) name = name.substr(slash + 1);
-            main_win_.setFileName(name);
-            setStatus(std::string(i18n_.t("status.loading_file")) + ": " + name);
-        }
-        modal_id_ = MODAL_NONE;
-        ImGui::CloseCurrentPopup();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Cancel", ImVec2(110, 0))) {
-        modal_id_ = MODAL_NONE;
-        ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
-}
-
-void App::_drawFileDialog() {
-#ifdef HAVE_IMGUI_FILE_DIALOG
-    if (!file_dialog_open_) return;
-    if (IGFD::FileDialog::Instance()->Display("ChooseAudio")) {
-        if (IGFD::FileDialog::Instance()->IsOk()) {
-            std::string filePathName = IGFD::FileDialog::Instance()->GetFilePathName();
-            current_file_ = filePathName;
-            has_file_ = true;
-            main_win_.setHasFile(true);
-            std::string name = current_file_;
-            auto slash = name.find_last_of("/\\");
-            if (slash != std::string::npos) name = name.substr(slash + 1);
-            main_win_.setFileName(name);
-            setStatus(std::string(i18n_.t("status.loading_file")) + ": " + name);
-        }
-        file_dialog_open_ = false;
-        IGFD::FileDialog::Instance()->Close();
-    }
-#endif
 }

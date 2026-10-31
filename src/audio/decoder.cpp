@@ -37,11 +37,13 @@ void paRelease() {
 #endif
 
 // ============================================================
-// Resampler
+// Resampler (优化版)
 // ============================================================
 Resampler::Resampler(int input_rate, int output_rate) {
     if (input_rate <= 0 || output_rate <= 0) step_ = 1.0f;
     else step_ = (float)input_rate / (float)output_rate;
+    input_index_ = 0.0;
+    read_idx_ = 0; // 初始化游标
 }
 
 void Resampler::put(const float* samples, int n) {
@@ -50,33 +52,42 @@ void Resampler::put(const float* samples, int n) {
 }
 
 int Resampler::getOutput(float* out, int max_samples) {
-    if (!out || max_samples <= 0 || buffer_.size() < 2) return 0;
+    if (!out || max_samples <= 0) return 0;
+    
+    // 实际可读的有效数据大小
+    int available = (int)buffer_.size() - read_idx_;
+    if (available < 2) return 0;
+
     int produced = 0;
+    // 使用相对偏移进行插值
     while (produced < max_samples) {
-        int base = (int)input_index_;
+        int base = read_idx_ + (int)input_index_;
         if (base + 1 >= (int)buffer_.size()) break;
-        float frac = (float)(input_index_ - base);
+        
+        float frac = (float)(input_index_ - (int)input_index_);
         float s1 = buffer_[base];
         float s2 = buffer_[base + 1];
         out[produced++] = s1 + frac * (s2 - s1);
         input_index_ += step_;
     }
-    int consumed = (int)input_index_;
-    if (consumed > 0) {
-        if (consumed >= (int)buffer_.size()) {
-            buffer_.clear();
-            input_index_ = 0.0;
-        } else {
-            buffer_.erase(buffer_.begin(), buffer_.begin() + consumed);
-            input_index_ -= consumed;
-        }
+
+    // 更新已消费的游标
+    read_idx_ += (int)input_index_;
+    input_index_ -= (int)input_index_;
+
+    // 只有当游标超过缓冲区一半时，才执行真正的 erase，大幅减少内存移动
+    if (read_idx_ > (int)buffer_.size() / 2) {
+        buffer_.erase(buffer_.begin(), buffer_.begin() + read_idx_);
+        read_idx_ = 0;
     }
+    
     return produced;
 }
 
 void Resampler::reset() {
     buffer_.clear();
     input_index_ = 0.0;
+    read_idx_ = 0;
 }
 
 // ============================================================
@@ -111,7 +122,6 @@ bool PortAudioInput::start(int device_index, int sample_rate, int chunk_size, Ca
     return false;
 #else
     if (running_.load()) return false;
-
     if (!paAcquire()) return false;
 
     if (device_index < 0) {
@@ -156,20 +166,8 @@ bool PortAudioInput::start(int device_index, int sample_rate, int chunk_size, Ca
 }
 
 void PortAudioInput::stop() {
-    if (!running_.load()) {
 #ifdef HAVE_PORTAUDIO
-        if (stream_) {
-            PaStream* s = static_cast<PaStream*>(stream_);
-            Pa_StopStream(s);
-            Pa_CloseStream(s);
-            stream_ = nullptr;
-            paRelease();
-        }
-#endif
-        return;
-    }
-
-#ifdef HAVE_PORTAUDIO
+    // 无论 running 状态如何，先确保关闭端口
     if (stream_) {
         PaStream* s = static_cast<PaStream*>(stream_);
         Pa_StopStream(s);
@@ -179,20 +177,22 @@ void PortAudioInput::stop() {
     }
 #endif
 
-    stop_flag_.store(true);
-    buf_cv_.notify_all();
-    if (worker_.joinable()) worker_.join();
-    running_.store(false);
-    {
-        std::lock_guard<std::mutex> lk(buf_mutex_);
-        buf_queue_.clear();
+    if (running_.load()) {
+        stop_flag_.store(true);
+        buf_cv_.notify_all();
+        if (worker_.joinable()) worker_.join();
+        running_.store(false);
     }
+    
+    std::lock_guard<std::mutex> lk(buf_mutex_);
+    buf_queue_.clear();
 }
 
 void PortAudioInput::pushSamples(const float* data, int n) {
     if (!data || n <= 0) return;
     std::lock_guard<std::mutex> lk(buf_mutex_);
-    if (buf_queue_.size() > 500) buf_queue_.pop_front(); // 增大到 500 防丢帧
+    // 如果队列积压严重，丢弃旧数据保证实时性
+    if (buf_queue_.size() > 100) buf_queue_.pop_front(); 
     buf_queue_.emplace_back(data, data + n);
     buf_cv_.notify_one();
 }

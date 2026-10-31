@@ -20,6 +20,7 @@ public:
 private:
     float  step_        = 1.0f;
     double input_index_ = 0.0;
+    int    read_idx_    = 0; // <--- 新增游标，配合高效重采样
     std::vector<float> buffer_;
 };
 

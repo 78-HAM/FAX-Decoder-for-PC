@@ -5,12 +5,6 @@
 #ifndef GL_CLAMP_TO_EDGE
 #define GL_CLAMP_TO_EDGE 0x812F
 #endif
-#ifndef GL_R8
-#define GL_R8 0x8229
-#endif
-#ifndef GL_RED
-#define GL_RED 0x1903
-#endif
 
 #include <GLFW/glfw3.h>
 #include "core/init.h"
@@ -24,17 +18,6 @@
 
 static void glfw_error_cb(int err, const char* desc) {
     std::fprintf(stderr, "GLFW Error %d: %s\n", err, desc);
-}
-
-static GLuint createTestTexture(int w, int h) {
-    std::vector<unsigned char> data(w * h * 4, 255);
-    GLuint tex = 0;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data.data());
-    return tex;
 }
 
 struct GlTexture { GLuint id = 0; int w = 0, h = 0; };
@@ -128,24 +111,13 @@ int main(int, char**) {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
-    GLuint test_tex = createTestTexture(600, 400);
-
     App app;
     app.setTextureUploader(uploadGrayTexture);
     app.init();
     app.setChineseAvailable(true);
 
-    // 生成测试图像数据
-    {
-        std::vector<float> demo_line(app.settings().image_width);
-        for (int row = 0; row < 200; ++row) {
-            for (int x = 0; x < (int)demo_line.size(); ++x) {
-                float fx = (float)x / (float)demo_line.size();
-                demo_line[x] = (fx * 0.5f) + (std::sin((float)row * 0.05f + fx * 10.0f) * 0.25f + 0.25f);
-            }
-            app.pushRawLine(demo_line.data(), 60000); // 传递 60000 采样率
-        }
-    }
+    // 删除了原先在此处强行塞入 200 行 demo_line 的测试数据逻辑，保证启动画面绝对干净
+    // 删除了无用的 createTestTexture 和 test_tex
 
     bool is_fullscreen = false;
     int wx, wy, ww, wh;
@@ -200,7 +172,6 @@ int main(int, char**) {
     }
 
     if (g_img_tex.id) glDeleteTextures(1, &g_img_tex.id);
-    glDeleteTextures(1, &test_tex);
     app.shutdown();
 
     ImGui_ImplOpenGL3_Shutdown();
