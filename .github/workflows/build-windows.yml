@@ -1,31 +1,24 @@
 name: Build Windows
-
 on:
   push:
     branches:
-      - 'test-cpp'
+      - test-cpp
   workflow_dispatch:
 
 jobs:
   build:
     name: Windows x64
     runs-on: windows-latest
-
     defaults:
       run:
         shell: msys2 {0}
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup MSYS2
-        uses: msys2/setup-msys2@v2
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
           update: false
           install: >-
-            git
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
@@ -33,24 +26,22 @@ jobs:
             mingw-w64-x86_64-portaudio
             mingw-w64-x86_64-curl
             zip
-
       - name: Configure
         run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
-
       - name: Build
         run: cmake --build build --parallel
-
       - name: Package
         run: |
           mkdir -p dist
           cp build/bin/fax_decoder.exe dist/ 2>/dev/null || cp build/fax_decoder.exe dist/
+          if [ -d "fount" ]; then
+            cp -r fount dist/
+          fi
           ldd dist/fax_decoder.exe | awk '/=>/ {print $3}' | grep -i "mingw64" | while read dll; do
             [ -f "$dll" ] && cp "$dll" dist/
           done
           cd dist && zip -9 ../fax-decoder-windows-x64.zip *
           cd ..
-          ls -la fax-decoder-windows-x64.zip
-
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:

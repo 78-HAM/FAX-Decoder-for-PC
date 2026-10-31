@@ -33,6 +33,7 @@ public:
     using TextureUploader = std::function<ImTextureID(const uint8_t*, int, int)>;
 
     void setTextureUploader(TextureUploader u) { texture_uploader_ = std::move(u); }
+    void setChineseAvailable(bool b) { chinese_available_ = b; main_win_.setChineseAvailable(b); }
 
     void init();
     void shutdown();
@@ -149,6 +150,7 @@ private:
     float temp_offset_ = 0.0f;
     int   temp_split_line_ = 0;
 
+    bool chinese_available_ = false;
     TextureUploader texture_uploader_;
     ImTextureID image_tex_ = nullptr;
     int image_tex_w_ = 0;

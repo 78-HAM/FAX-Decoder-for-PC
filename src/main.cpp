@@ -2,7 +2,6 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
-// 补充 Windows 下缺失的 OpenGL 宏
 #ifndef GL_CLAMP_TO_EDGE
 #define GL_CLAMP_TO_EDGE 0x812F
 #endif
@@ -24,7 +23,6 @@ static void glfw_error_cb(int err, const char* desc) {
     std::fprintf(stderr, "GLFW Error %d: %s\n", err, desc);
 }
 
-// 生成测试渐变纹理
 static GLuint createTestTexture(int w, int h) {
     std::vector<unsigned char> data(w * h * 4);
     for (int y = 0; y < h; ++y) {
@@ -45,16 +43,11 @@ static GLuint createTestTexture(int w, int h) {
     return tex;
 }
 
-struct GlTexture {
-    GLuint id = 0;
-    int w = 0, h = 0;
-};
-
+struct GlTexture { GLuint id = 0; int w = 0, h = 0; };
 static GlTexture g_img_tex;
 
 static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
     if (!pixels || w <= 0 || h <= 0) return (ImTextureID)0;
-
     if (g_img_tex.id == 0 || g_img_tex.w != w || g_img_tex.h != h) {
         if (g_img_tex.id) glDeleteTextures(1, &g_img_tex.id);
         glGenTextures(1, &g_img_tex.id);
@@ -64,8 +57,7 @@ static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, w, h, 0, GL_RED, GL_UNSIGNED_BYTE, pixels);
-        g_img_tex.w = w;
-        g_img_tex.h = h;
+        g_img_tex.w = w; g_img_tex.h = h;
     } else {
         glBindTexture(GL_TEXTURE_2D, g_img_tex.id);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -88,10 +80,9 @@ int main(int, char**) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-    std::printf("[2] Creating window...\n"); std::fflush(stdout);
     GLFWwindow* window = glfwCreateWindow(1400, 820, "FAX Decoder", nullptr, nullptr);
     if (!window) {
-        std::printf("[ERROR] Window creation failed. Your GPU may not support OpenGL 3.0.\n");
+        std::printf("[ERROR] Window creation failed.\n");
         std::system("pause");
         glfwTerminate();
         return 1;
@@ -99,23 +90,37 @@ int main(int, char**) {
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
 
-    std::printf("[3] Init ImGui...\n"); std::fflush(stdout);
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
+
+    // --- 加载中文字体 ---
+    ImGuiIO& io = ImGui::GetIO();
+    bool font_loaded = false;
+    
+    // 注意你的文件夹名字是 fount
+    ImFont* font = io.Fonts->AddFontFromFileTTF("fount/Roboto-Medium.ttf", 20.0f, nullptr, io.Fonts->GetGlyphRangesChineseFull());
+    if (!font) {
+        std::printf("[WARN] Failed to load fount/Roboto-Medium.ttf, using default font.\n");
+        io.Fonts->AddFontDefault();
+    } else {
+        std::printf("[INFO] Chinese font loaded.\n");
+        font_loaded = true;
+    }
+
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
-    std::printf("[4] Init App core...\n"); std::fflush(stdout);
     GLuint test_tex = createTestTexture(600, 400);
 
     App app;
     app.setTextureUploader(uploadGrayTexture);
     app.init();
+    
+    // 告诉 UI 层：中文字体已就绪，解锁语言菜单
+    app.setChineseAvailable(font_loaded);
 
-    std::printf("[5] App initialized. Entering loop...\n"); std::fflush(stdout);
-
-    // demo 测试图像
+    // 默认演示图像
     {
         std::vector<float> demo_line(app.settings().image_width);
         for (int row = 0; row < 200; ++row) {
@@ -125,21 +130,17 @@ int main(int, char**) {
             }
             app.pushRawLine(demo_line.data(), 48000);
         }
-        app.setStatus("Demo image loaded. Audio layer pending.");
     }
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
-
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
         app.update();
 
-        if (app.wantsClose()) {
-            glfwSetWindowShouldClose(window, GLFW_TRUE);
-        }
+        if (app.wantsClose()) glfwSetWindowShouldClose(window, GLFW_TRUE);
 
         ImGui::Render();
         int w, h;
@@ -151,8 +152,6 @@ int main(int, char**) {
         glfwSwapBuffers(window);
     }
 
-    std::printf("[6] Exiting loop...\n"); std::fflush(stdout);
-
     if (g_img_tex.id) glDeleteTextures(1, &g_img_tex.id);
     glDeleteTextures(1, &test_tex);
     app.shutdown();
@@ -162,8 +161,5 @@ int main(int, char**) {
     ImGui::DestroyContext();
     glfwDestroyWindow(window);
     glfwTerminate();
-
-    std::printf("[7] Done. Press any key to exit...\n");
-    std::system("pause");
     return 0;
 }

@@ -100,7 +100,7 @@ void App::init() {
 
     i18n_.setLanguage(settings_.language);
     main_win_.setLanguage(settings_.language);
-    main_win_.setChineseAvailable(false);
+    main_win_.setChineseAvailable(chinese_available_);
 
     image_.init(settings_.image_width, settings_.max_lines);
     demod_.setConfig({1500.0f, 2300.0f, 128, settings_.contrast});
