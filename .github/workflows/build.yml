@@ -68,16 +68,18 @@ jobs:
         run: |
           mkdir -p dist
           cp build/bin/*.exe dist/ || cp build/*.exe dist/
-          if [ -d "resources" ]; then cp -r resources dist/; fi
           
           # 抓取 mingw 运行库 DLL
           ldd dist/*.exe | awk '/=>/ {print $3}' | grep -i "mingw" | while read dll; do cp "$dll" dist/; done
           
-          # 生成 NSIS 安装包
+          # 生成 NSIS 安装包并提取
           cd build
           cpack -G NSIS
-          cp *.exe ../dist/ || true
+          find . -maxdepth 1 -name "*.exe" -exec cp {} ../dist/ \;
           cd ..
+          
+          # 把资源文件夹放进 dist
+          if [ -d "resources" ]; then cp -r resources dist/; fi
           
           # 打包便携版 ZIP
           cd dist 
