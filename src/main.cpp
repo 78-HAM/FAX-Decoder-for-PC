@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <vector>
 #include <cmath>
+#include <string>
 
 static void glfw_error_cb(int err, const char* desc) {
     std::fprintf(stderr, "GLFW Error %d: %s\n", err, desc);
@@ -48,6 +49,16 @@ static GlTexture g_img_tex;
 
 static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
     if (!pixels || w <= 0 || h <= 0) return (ImTextureID)0;
+
+    // 修复红线条：将单通道扩展为 RGBA 格式
+    std::vector<uint8_t> rgba(w * h * 4);
+    for (int i = 0; i < w * h; ++i) {
+        rgba[i * 4 + 0] = pixels[i];
+        rgba[i * 4 + 1] = pixels[i];
+        rgba[i * 4 + 2] = pixels[i];
+        rgba[i * 4 + 3] = 255;
+    }
+
     if (g_img_tex.id == 0 || g_img_tex.w != w || g_img_tex.h != h) {
         if (g_img_tex.id) glDeleteTextures(1, &g_img_tex.id);
         glGenTextures(1, &g_img_tex.id);
@@ -56,22 +67,20 @@ static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, w, h, 0, GL_RED, GL_UNSIGNED_BYTE, pixels);
-        g_img_tex.w = w; g_img_tex.h = h;
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+        g_img_tex.w = w;
+        g_img_tex.h = h;
     } else {
         glBindTexture(GL_TEXTURE_2D, g_img_tex.id);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RED, GL_UNSIGNED_BYTE, pixels);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
     }
     return (ImTextureID)(intptr_t)g_img_tex.id;
 }
 
 int main(int, char**) {
-    std::printf("[1] App starting...\n"); std::fflush(stdout);
-
     glfwSetErrorCallback(glfw_error_cb);
     if (!glfwInit()) {
-        std::printf("[ERROR] GLFW Init failed.\n");
         std::system("pause");
         return 1;
     }
@@ -82,7 +91,6 @@ int main(int, char**) {
 
     GLFWwindow* window = glfwCreateWindow(1400, 820, "FAX Decoder", nullptr, nullptr);
     if (!window) {
-        std::printf("[ERROR] Window creation failed.\n");
         std::system("pause");
         glfwTerminate();
         return 1;
@@ -94,19 +102,20 @@ int main(int, char**) {
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
 
-    // --- 加载中文字体 ---
+    // --- 加载多语言字体 ---
     ImGuiIO& io = ImGui::GetIO();
-    bool font_loaded = false;
     
-    // 注意你的文件夹名字是 fount
-    ImFont* font = io.Fonts->AddFontFromFileTTF("fount/Roboto-Medium.ttf", 20.0f, nullptr, io.Fonts->GetGlyphRangesChineseFull());
-    if (!font) {
-        std::printf("[WARN] Failed to load fount/Roboto-Medium.ttf, using default font.\n");
-        io.Fonts->AddFontDefault();
-    } else {
-        std::printf("[INFO] Chinese font loaded.\n");
-        font_loaded = true;
-    }
+    // 英文和俄文用 Arial，包含 Cyrillic 字符集
+    ImFont* font_en = io.Fonts->AddFontFromFileTTF("fount/Arial.ttf", 20.0f, nullptr, io.Fonts->GetGlyphRangesCyrillic());
+    if (!font_en) font_en = io.Fonts->AddFontDefault();
+    
+    // 中文用 Roboto-Medium
+    ImFont* font_zh = io.Fonts->AddFontFromFileTTF("fount/Roboto-Medium.ttf", 20.0f, nullptr, io.Fonts->GetGlyphRangesChineseFull());
+    if (!font_zh) font_zh = font_en;
+    
+    // 日文用 Roboto-Medium
+    ImFont* font_jp = io.Fonts->AddFontFromFileTTF("fount/Roboto-Medium.ttf", 20.0f, nullptr, io.Fonts->GetGlyphRangesJapanese());
+    if (!font_jp) font_jp = font_zh;
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
@@ -116,11 +125,9 @@ int main(int, char**) {
     App app;
     app.setTextureUploader(uploadGrayTexture);
     app.init();
-    
-    // 告诉 UI 层：中文字体已就绪，解锁语言菜单
-    app.setChineseAvailable(font_loaded);
+    app.setChineseAvailable(true); // 告知 UI 字体已就绪
 
-    // 默认演示图像
+    // 演示图像
     {
         std::vector<float> demo_line(app.settings().image_width);
         for (int row = 0; row < 200; ++row) {
@@ -138,7 +145,18 @@ int main(int, char**) {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        // 根据当前选择的语言，自动切换字体
+        std::string lang = app.settings().language;
+        if (lang == "zh-cn" || lang == "zh_CN" || lang == "zh-tw" || lang == "zh_TW") {
+            ImGui::PushFont(font_zh);
+        } else if (lang == "jp" || lang == "ja") {
+            ImGui::PushFont(font_jp);
+        } else {
+            ImGui::PushFont(font_en);
+        }
+        
         app.update();
+        ImGui::PopFont();
 
         if (app.wantsClose()) glfwSetWindowShouldClose(window, GLFW_TRUE);
 

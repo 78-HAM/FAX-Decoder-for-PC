@@ -8,51 +8,60 @@
 // 翻译表
 // ============================================================
 static const std::pair<const char*, const char*> kLangList[] = {
-    {"zh_CN", "简体中文"},
-    {"en",    "English"},
-    {"ru",    "Русский"},
-    {"ja",    "日本語"},
-    {"zh_TW", "繁體中文"},
+    {"en",    "en"},
+    {"zh-cn", "zh-cn"},
+    {"zh-tw", "zh-tw"},
+    {"jp",    "jp"},
+    {"ru",    "ru"},
 };
+int langIndex(const std::string& code) {
+    if (code == "en")    return 0;
+    if (code == "zh-cn" || code == "zh_CN") return 1;
+    if (code == "zh-tw" || code == "zh_TW") return 4;
+    if (code == "jp" || code == "ja")    return 3;
+    if (code == "ru")    return 2;
+    return 0;
+}
 
-static const std::unordered_map<std::string, std::pair<const char*, const char*>>& trTable() {
-    static const std::unordered_map<std::string, std::pair<const char*, const char*>> m = {
-        {"app.title",                    {"FAX Decoder", "FAX 解码器"}},
-        {"menu.file",                    {"File", "文件"}},
-        {"menu.file.pick",               {"Select Audio File...", "选择音频文件…"}},
-        {"menu.file.decode",             {"Start File Decoding", "开始文件解码"}},
-        {"menu.file.save",               {"Save Image...", "保存图像…"}},
-        {"menu.file.exit",               {"Exit", "退出"}},
-        {"menu.settings",                {"Settings", "设置"}},
-        {"menu.settings.spectrum_decay", {"Set Spectrum Decay", "设置频谱衰减速度"}},
-        {"menu.settings.width",          {"Set Image Width", "设置图像宽度"}},
-        {"menu.settings.contrast",       {"Set Contrast", "设置对比度"}},
-        {"menu.settings.language",       {"Language", "语言"}},
-        {"menu.settings.skew",           {"Calibrate Skew", "校准歪斜"}},
-        {"menu.settings.start",          {"Set Start Point", "设置起点"}},
-        {"menu.settings.rpm",            {"Select RPM", "选择转速"}},
-        {"menu.settings.manual",         {"Manual Correction", "手动纠正"}},
-        {"menu.drivers",                 {"Drivers", "驱动"}},
-        {"menu.drivers.reset",           {"Reset", "重置"}},
-        {"menu.drivers.settings",        {"Settings...", "设置…"}},
-        {"menu.record",                  {"Recording", "录制"}},
-        {"menu.record.open",             {"Open Recording Panel", "打开录制面板"}},
-        {"menu.about",                   {"About", "关于"}},
-        {"menu.about.about",             {"About", "关于"}},
-        {"menu.about.check_update",      {"Check for Updates", "检查更新"}},
-        {"btn.start",                    {"Start", "开始解码"}},
-        {"btn.stop",                     {"Stop", "停止解码"}},
-        {"btn.clear",                    {"Clear", "清空图像"}},
-        {"label.spectrum",               {"Spectrum", "频谱"}},
-        {"label.status",                 {"Status:", "状态："}},
-        {"status.ready",                 {"Ready", "就绪"}},
-        {"status.no_file",               {"No file selected", "未选择文件"}},
-        {"calib.btn.fine_tune",          {"Fine-tune", "手动调整"}},
-        {"calib.btn.confirm_p1",         {"Confirm Point 1", "确定第 1 点"}},
-        {"calib.btn.apply",              {"Apply", "应用校准"}},
-        {"calib.btn.back",               {"Back", "返回"}},
-        {"calib.btn.cancel",             {"Cancel", "取消"}},
-        {"calib.btn.confirm_pos",        {"Confirm Position", "确定位置"}},
+using TR5 = std::array<const char*, 5>;
+const std::unordered_map<std::string, TR5>& trTable() {
+    static const std::unordered_map<std::string, TR5> m = {
+        {"app.title",                    {"FAX Decoder", "FAX 解码器", "FAX Декодер", "FAX デコーダー", "FAX 解碼器"}},
+        {"menu.file",                    {"File", "文件", "Файл", "ファイル", "檔案"}},
+        {"menu.file.pick",               {"Select Audio File...", "选择音频文件…", "Выбрать аудиофайл…", "音声ファイルを選択…", "選擇音訊檔案…"}},
+        {"menu.file.decode",             {"Start File Decoding", "开始文件解码", "Начать декодирование", "ファイルデコード開始", "開始檔案解碼"}},
+        {"menu.file.save",               {"Save Image...", "保存图像…", "Сохранить изображение…", "画像を保存…", "儲存圖片…"}},
+        {"menu.file.exit",               {"Exit", "退出", "Выход", "終了", "結束"}},
+        {"menu.settings",                {"Settings", "设置", "Настройки", "設定", "設定"}},
+        {"menu.settings.spectrum_decay", {"Set Spectrum Decay", "设置频谱衰减速度", "Скорость затухания", "スペクトル減衰速度", "設定頻譜衰減速度"}},
+        {"menu.settings.width",          {"Set Image Width", "设置图像宽度", "Ширина изображения", "画像幅を設定", "設定圖片寬度"}},
+        {"menu.settings.contrast",       {"Set Contrast", "设置对比度", "Контраст", "コントラスト", "設定對比度"}},
+        {"menu.settings.language",       {"Language", "语言", "Язык", "言語", "語言"}},
+        {"menu.settings.skew",           {"Calibrate Skew", "校准歪斜", "Калибровка наклона", "傾き補正", "校正歪斜"}},
+        {"menu.settings.start",          {"Set Start Point", "设置起点", "Задать начало", "開始位置を設定", "設定起點"}},
+        {"menu.settings.rpm",            {"Select RPM", "选择转速", "Выбрать обороты", "回転数を選択", "選擇轉速"}},
+        {"menu.settings.manual",         {"Manual Correction", "手动纠正", "Ручная коррекция", "手動補正", "手動修正"}},
+        {"menu.drivers",                 {"Drivers", "驱动", "Драйверы", "ドライバー", "驅動程式"}},
+        {"menu.drivers.reset",           {"Reset", "重置", "Сброс", "リセット", "重設"}},
+        {"menu.drivers.settings",        {"Settings...", "设置…", "Настройки…", "設定…", "設定…"}},
+        {"menu.record",                  {"Recording", "录制", "Запись", "録音", "錄製"}},
+        {"menu.record.open",             {"Open Recording Panel", "打开录制面板", "Открыть панель записи", "録音パネルを開く", "開啟錄製面板"}},
+        {"menu.about",                   {"About", "关于", "О программе", "このアプリについて", "關於"}},
+        {"menu.about.about",             {"About", "关于", "О программе", "このアプリについて", "關於"}},
+        {"menu.about.check_update",      {"Check for Updates", "检查更新", "Проверить обновления", "更新を確認", "檢查更新"}},
+        {"btn.start",                    {"Start", "开始解码", "Старт", "開始", "開始解碼"}},
+        {"btn.stop",                     {"Stop", "停止解码", "Стоп", "停止", "停止解碼"}},
+        {"btn.clear",                    {"Clear", "清空图像", "Очистить", "クリア", "清空圖片"}},
+        {"label.spectrum",               {"Spectrum", "频谱", "Спектр", "スペクトル", "頻譜"}},
+        {"label.status",                 {"Status:", "状态：", "Статус:", "状態：", "狀態："}},
+        {"status.ready",                 {"Ready", "就绪", "Готов", "準備完了", "就緒"}},
+        {"status.no_file",               {"No file selected", "未选择文件", "Файл не выбран", "ファイル未選択", "未選擇檔案"}},
+        {"calib.btn.fine_tune",          {"Fine-tune", "手动调整", "Точная настройка", "微調整", "手動調整"}},
+        {"calib.btn.confirm_p1",         {"Confirm Point 1", "确定第 1 点", "Подтвердить точку 1", "点1を確定", "確定第 1 點"}},
+        {"calib.btn.apply",              {"Apply", "应用校准", "Применить", "適用", "套用校正"}},
+        {"calib.btn.back",               {"Back", "返回", "Назад", "戻る", "返回"}},
+        {"calib.btn.cancel",             {"Cancel", "取消", "Отмена", "キャンセル", "取消"}},
+        {"calib.btn.confirm_pos",        {"Confirm Position", "确定位置", "Подтвердить позицию", "位置を確定", "確定位置"}},
     };
     return m;
 }
@@ -61,8 +70,7 @@ const char* MainWindow::t(const char* key) const {
     const auto& m = trTable();
     auto it = m.find(key);
     if (it == m.end()) return key;
-    bool zh = (language_ == "zh_CN" || language_ == "zh_TW") && chinese_available_;
-    return zh ? it->second.second : it->second.first;
+    return it->second[langIndex(language_)];
 }
 
 // ============================================================
@@ -126,7 +134,7 @@ void MainWindow::drawMenuBar() {
         if (ImGui::BeginMenu(t("menu.settings.language"))) {
             for (auto& L : kLangList) {
                 bool sel = (language_ == L.first);
-                bool enabled = chinese_available_ || std::string(L.first) == "en";
+                bool enabled = true;
                 if (ImGui::MenuItem(L.second, nullptr, sel, enabled)) {
                     if (cb_.onSetLanguage) cb_.onSetLanguage(L.first);
                 }

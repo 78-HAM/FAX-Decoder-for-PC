@@ -20,8 +20,7 @@ namespace {
 struct LangPair { std::string code, name; };
 const std::vector<LangPair>& langList() {
     static const std::vector<LangPair> L = {
-        {"zh_CN", "简体中文"}, {"en", "English"}, {"ru", "Русский"},
-        {"ja", "日本語"}, {"zh_TW", "繁體中文"},
+        {"en", "en"}, {"zh-cn", "zh-cn"}, {"ru", "ru"}, {"jp", "jp"}, {"zh-tw", "zh-tw"},
     };
     return L;
 }
@@ -69,10 +68,10 @@ const std::unordered_map<std::string, TR5>& trTable() {
 
 int langIndex(const std::string& code) {
     if (code == "en")    return 0;
-    if (code == "zh_CN") return 1;
+    if (code == "zh-cn" || code == "zh_CN") return 1;
     if (code == "ru")    return 2;
-    if (code == "ja")    return 3;
-    if (code == "zh_TW") return 4;
+    if (code == "jp" || code == "ja")    return 3;
+    if (code == "zh-tw" || code == "zh_TW") return 4;
     return 0;
 }
 } // namespace
