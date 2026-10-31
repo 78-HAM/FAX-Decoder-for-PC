@@ -3,7 +3,7 @@ name: Build Windows Installer
 on:
   push:
     branches: [ test-cpp ]
-    tags: [ 'v*' ]
+    tags: [ '*' ]
   workflow_dispatch:
 
 jobs:
@@ -40,20 +40,18 @@ jobs:
 
       - name: Create Installer
         run: |
-          # 1. 准备安装包素材目录 build/dist
+          # 准备安装素材目录
           mkdir -p build/dist
           cp build/bin/*.exe build/dist/ 2>/dev/null || cp build/*.exe build/dist/ 2>/dev/null || true
-          
-          # 2. 拷贝资源目录
           if [ -d "resources" ]; then cp -r resources build/dist/; fi
           
-          # 3. 抓取所有依赖的 DLL 放进安装包素材
+          # 强制收集依赖 DLL
           ldd build/dist/*.exe 2>/dev/null | awk '/=>/ {print $3}' | grep -i "mingw" | while read dll; do cp "$dll" build/dist/ 2>/dev/null; done || true
           
-          # 4. 让 CPack 把 build/dist 打包成安装程序
+          # 让 CPack 将 build/dist 目录打包成安装程序
           cd build
           cpack -G NSIS
-          echo "=== Generated Installer ==="
+          echo "=== Generated Installer Size ==="
           ls -la *.exe
 
       - name: Upload Installer Artifact

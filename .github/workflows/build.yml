@@ -3,16 +3,15 @@ name: Build Platforms
 on:
   push:
     branches: [ test-cpp ]
-    tags:
-      - '*'
+    tags: [ '*' ]
   workflow_dispatch:
 
 jobs:
   build:
-    permissions:
-      contents: write
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -52,7 +51,6 @@ jobs:
             mingw-w64-${{ matrix.arch }}-glfw
             mingw-w64-${{ matrix.arch }}-portaudio
             mingw-w64-${{ matrix.arch }}-curl
-            mingw-w64-${{ matrix.arch }}-nsis
             zip
 
       - name: Setup Linux Deps
@@ -70,33 +68,10 @@ jobs:
         if: startsWith(matrix.os, 'windows')
         run: |
           mkdir -p dist
-          # 拷贝 exe
           cp build/bin/*.exe dist/ 2>/dev/null || cp build/*.exe dist/ 2>/dev/null || true
-          
-          # 拷贝 DLL
           ldd dist/*.exe 2>/dev/null | awk '/=>/ {print $3}' | grep -i "mingw" | while read dll; do cp "$dll" dist/ 2>/dev/null; done || true
-          
-          # 生成安装包
-          cd build
-          cpack -G NSIS
-          
-          echo "=== CPack Output ==="
-          ls -la *.exe || echo "No installer generated!"
-          
-          # 强制把 build 目录下的所有 exe 拷贝到 dist
-          cp *.exe ../dist/ 2>/dev/null || true
-          cd ..
-          
-          # 拷贝资源目录到便携版
           if [ -d "resources" ]; then cp -r resources dist/; fi
-          
-          echo "=== Final dist folder ==="
-          ls -la dist/
-          
-          # 打包便携版
-          cd dist 
-          zip -9 ../fax-decoder-windows-${{ matrix.arch }}-portable.zip *
-          cd ..
+          cd dist && zip -9 ../fax-decoder-windows-${{ matrix.arch }}-portable.zip *
           
       - name: Package Linux
         if: startsWith(matrix.os, 'ubuntu')
