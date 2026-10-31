@@ -126,6 +126,7 @@ target_sources(fax_decoder PRIVATE
 # 安装与打包 (CPack)
 # ==========================================
 install(TARGETS fax_decoder RUNTIME DESTINATION .)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/resources/ DESTINATION resources OPTIONAL)
 
 if(WIN32)
     set(CPACK_GENERATOR "NSIS")

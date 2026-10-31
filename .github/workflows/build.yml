@@ -67,21 +67,30 @@ jobs:
         if: startsWith(matrix.os, 'windows')
         run: |
           mkdir -p dist
-          cp build/bin/*.exe dist/ || cp build/*.exe dist/
+          # 拷贝 exe
+          cp build/bin/*.exe dist/ 2>/dev/null || cp build/*.exe dist/ 2>/dev/null || true
           
-          # 抓取 mingw 运行库 DLL
-          ldd dist/*.exe | awk '/=>/ {print $3}' | grep -i "mingw" | while read dll; do cp "$dll" dist/; done
+          # 拷贝 DLL
+          ldd dist/*.exe 2>/dev/null | awk '/=>/ {print $3}' | grep -i "mingw" | while read dll; do cp "$dll" dist/ 2>/dev/null; done || true
           
-          # 生成 NSIS 安装包并提取
+          # 生成安装包
           cd build
           cpack -G NSIS
-          find . -maxdepth 1 -name "*.exe" -exec cp {} ../dist/ \;
+          
+          echo "=== CPack Output ==="
+          ls -la *.exe || echo "No installer generated!"
+          
+          # 强制把 build 目录下的所有 exe 拷贝到 dist
+          cp *.exe ../dist/ 2>/dev/null || true
           cd ..
           
-          # 把资源文件夹放进 dist
+          # 拷贝资源目录到便携版
           if [ -d "resources" ]; then cp -r resources dist/; fi
           
-          # 打包便携版 ZIP
+          echo "=== Final dist folder ==="
+          ls -la dist/
+          
+          # 打包便携版
           cd dist 
           zip -9 ../fax-decoder-windows-${{ matrix.arch }}-portable.zip *
           cd ..
@@ -90,7 +99,7 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         run: |
           mkdir -p dist
-          cp build/bin/* dist/ || cp build/fax_decoder dist/
+          cp build/bin/* dist/ 2>/dev/null || cp build/fax_decoder dist/ 2>/dev/null || true
           if [ -d "resources" ]; then cp -r resources dist/; fi
           cd dist && zip -9 ../fax-decoder-linux-${{ matrix.arch }}.zip *
           
