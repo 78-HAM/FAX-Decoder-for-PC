@@ -569,7 +569,7 @@ void App::_onClear() {
 void App::_onPickFile() {
     file_dialog_open_ = true;
 #ifdef HAVE_IMGUI_FILE_DIALOG
-    IGFD::FileDialog::Instance().OpenDialog(
+    IGFD::FileDialog::Instance()->OpenDialog(
         "ChooseAudio", "Select Audio File",
         ".wav,.mp3,.flac,.ogg,.aiff,.au");
 #else
@@ -1014,13 +1014,13 @@ void App::_drawModalSaveRecord() {
 void App::_drawFileDialog() {
 #ifdef HAVE_IMGUI_FILE_DIALOG
     if (!file_dialog_open_) return;
-    if (!IGFD::FileDialog::Instance().IsDialogOpen("ChooseAudio")) {
+    if (!IGFD::FileDialog::Instance()->IsDialogOpen("ChooseAudio")) {
         file_dialog_open_ = false;
         return;
     }
-    IGFD::FileDialog::Instance().Display("ChooseAudio");
-    if (IGFD::FileDialog::Instance().IsDialogClosed("ChooseAudio")) {
-        if (auto* result = IGFD::FileDialog::Instance().GetDialogResult("ChooseAudio")) {
+    IGFD::FileDialog::Instance()->Display("ChooseAudio");
+    if (IGFD::FileDialog::Instance()->IsDialogClosed("ChooseAudio")) {
+        if (auto* result = IGFD::FileDialog::Instance()->GetDialogResult("ChooseAudio")) {
             current_file_ = result->filePathName;
             has_file_ = true;
             main_win_.setHasFile(true);
@@ -1030,7 +1030,7 @@ void App::_drawFileDialog() {
             main_win_.setFileName(name);
             setStatus(std::string(i18n_.t("status.loading_file")) + ": " + name);
         }
-        IGFD::FileDialog::Instance().Close();
+        IGFD::FileDialog::Instance()->Close();
         file_dialog_open_ = false;
     }
 #endif

@@ -57,7 +57,7 @@ private:
     void initWindow();
 
     Config cfg_;
-    std::vector<float> window_;
+    mutable std::vector<float> window_;
 
     mutable std::unique_ptr<FftKiss> fft_;
     mutable int fft_n_ = 0;
@@ -92,7 +92,7 @@ private:
     int ring_pos_ = 0;
     std::vector<float> latest_;
     std::vector<float> display_;
-    std::vector<float> window_;
+    mutable std::vector<float> window_;
     std::vector<float> tmp_work_;
     std::vector<float> tmp_mag_;
 };
