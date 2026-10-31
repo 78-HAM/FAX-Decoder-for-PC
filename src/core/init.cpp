@@ -333,7 +333,6 @@ void App::pushRawLine(const float* line_data, int sr) {
                           settings_.image_width, demod_out.data());
 
     {
-        std::lock_guard<std::mutex> lk(image_.mutex());
         if (image_.currentLines() >= settings_.max_lines) return;
         image_.pushLine(demod_out.data(), settings_.image_width,
                         settings_.is_binary_mode);
