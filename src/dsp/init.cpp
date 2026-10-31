@@ -64,27 +64,29 @@ void Demodulator::initWindow() {
     if ((N % 2) != 0) N += 1;
     cfg_.window_size = N;
     window_.resize(N);
-    // Hamming，与 Python 一致：0.54 - 0.46*cos(2πi/(N-1))
     for (int i = 0; i < N; ++i) {
-        window_[i] = 0.54f - 0.46f * std::cos(2.0f * kPi * (float)i / (float)(N - 1));
+        window_[i] = 0.5f * (1.0f - std::cos(2.0f * kPi * (float)i / (float)(N - 1)));
     }
 }
 
 void Demodulator::demodulateLine(const float* buf, int len, int sr,
                                  int out_width, float* out) const {
+    if (!out || out_width <= 0) return;
+    if (!buf || len < 8 || sr <= 0) {
         std::fill(out, out + out_width, 0.0f);
         return;
     }
 
+    // 懒创建 FFT
+    if (!fft_ || fft_n_ != cfg_.window_size) {
         fft_.reset(new FftKiss(cfg_.window_size));
         fft_n_ = cfg_.window_size;
         work_in_.resize(cfg_.window_size);
         work_mag_.resize(fft_->nBins());
+        // 重建窗
         window_.resize(cfg_.window_size);
-        // 使用 Hann 窗（比 Hamming 窗旁瓣更低，有效减少频谱泄漏引起的波纹）
         for (int i = 0; i < cfg_.window_size; ++i) {
-            window_[i] = 0.5f * (1.0f - std::cos(2.0f * kPi * (float)i
-                                                / (float)(cfg_.window_size - 1)));
+            window_[i] = 0.5f * (1.0f - std::cos(2.0f * kPi * (float)i / (float)(cfg_.window_size - 1)));
         }
     }
 
@@ -116,7 +118,7 @@ void Demodulator::demodulateLine(const float* buf, int len, int sr,
             energy += v * v;
         }
         
-        // 能量门限：如果是静音或极低电平信号，直接输出白色（无噪点）
+        // 能量门限：静音时直接返回白色（1.0），防止噪点
         float rms = std::sqrt(energy / N);
         if (rms < 10.0f) { 
             out[i] = 1.0f; 
@@ -164,7 +166,6 @@ SpectrumDisplay::SpectrumDisplay(int fft_size)
     window_.resize(fft_size_);
     tmp_work_.resize(fft_size_);
     tmp_mag_.resize(fft_size_ / 2 + 1);
-    // Hann，与 Python compute_fft 一致：0.5*(1 - cos(2πi/(N-1)))
     for (int i = 0; i < fft_size_; ++i) {
         window_[i] = 0.5f * (1.0f - std::cos(2.0f * kPi * (float)i
                                             / (float)(fft_size_ - 1)));
@@ -188,7 +189,6 @@ void SpectrumDisplay::pushSamples(const float* samples, int n) {
 }
 
 void SpectrumDisplay::computeSpectrum() {
-    // Python: x = in / 32768；w = Hann；fft；mags=abs；db；归一化 60dB
     for (int i = 0; i < fft_size_; ++i) {
         tmp_work_[i] = (ring_[i] / 32768.0f) * window_[i];
     }
@@ -198,7 +198,6 @@ void SpectrumDisplay::computeSpectrum() {
     if ((int)tmp_mag_.size() < nb_half) nb_half = (int)tmp_mag_.size();
 
     float max_db = -1e9f;
-    // 先临时算 db 存入 tmp_work_ 前 nb_half 位（复用缓冲）
     for (int i = 0; i < nb_half; ++i) {
         float abs_val = std::sqrt(tmp_mag_[i]);
         float d = 20.0f * std::log10(abs_val + 1e-4f);
