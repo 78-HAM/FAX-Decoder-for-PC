@@ -1,0 +1,10 @@
+build/
+build.log
+cmake.log
+*.o
+*.obj
+*.exe
+*.a
+*.so
+*.dll
+third_party/imgui/.git
