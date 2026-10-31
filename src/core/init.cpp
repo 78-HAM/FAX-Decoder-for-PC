@@ -374,6 +374,7 @@ void App::_uploadImageIfDirty() {
 void App::_bindCallbacks() {
     MainWindowCallbacks cb;
     cb.onToggleDecode     = [this]() { if (state_ == State::IDLE) _onStart(); else _onStop(); };
+    cb.onLoadFont         = [this]() { _onLoadFont(); };
     cb.onClear            = [this]() { _onClear(); };
     cb.onExit             = [this]() { _onExit(); };
     cb.onOpenRecord       = [this]() { _onOpenRecord(); };
@@ -677,6 +678,12 @@ void App::_onSaveImage() {
 }
 
 void App::_onExit() { wants_close_ = true; }
+
+void App::_onLoadFont() {
+    std::string path = NativeFileDialog::openFile("Select Custom Font", "Font Files\0*.ttf;*.ttc;*.otf\0All Files\0*.*\0");
+        pending_font_path_ = path;
+    }
+}
 
 // ============================================================
 // 录音

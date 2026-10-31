@@ -19,6 +19,7 @@
 #include <vector>
 #include <cmath>
 #include <string>
+#include <tuple>
 
 static void glfw_error_cb(int err, const char* desc) {
     std::fprintf(stderr, "GLFW Error %d: %s\n", err, desc);
@@ -49,7 +50,6 @@ static GlTexture g_img_tex;
 
 static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
     if (!pixels || w <= 0 || h <= 0) return (ImTextureID)0;
-
     std::vector<uint8_t> rgba(w * h * 4);
     for (int i = 0; i < w * h; ++i) {
         rgba[i * 4 + 0] = pixels[i];
@@ -57,7 +57,6 @@ static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
         rgba[i * 4 + 2] = pixels[i];
         rgba[i * 4 + 3] = 255;
     }
-
     if (g_img_tex.id == 0 || g_img_tex.w != w || g_img_tex.h != h) {
         if (g_img_tex.id) glDeleteTextures(1, &g_img_tex.id);
         glGenTextures(1, &g_img_tex.id);
@@ -78,11 +77,8 @@ static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
 }
 
 int main(int, char**) {
-    std::printf("[1] App starting...\n"); std::fflush(stdout);
-
     glfwSetErrorCallback(glfw_error_cb);
     if (!glfwInit()) {
-        std::printf("[ERROR] GLFW Init failed.\n");
         std::system("pause");
         return 1;
     }
@@ -91,10 +87,8 @@ int main(int, char**) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-    std::printf("[2] Creating window...\n"); std::fflush(stdout);
-    GLFWwindow* window = glfwCreateWindow(1400, 820, "FAX Decoder", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(1400, 820, "FAX Decoder 2.0", nullptr, nullptr);
     if (!window) {
-        std::printf("[ERROR] Window creation failed.\n");
         std::system("pause");
         glfwTerminate();
         return 1;
@@ -102,36 +96,44 @@ int main(int, char**) {
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
 
-    std::printf("[3] Init ImGui...\n"); std::fflush(stdout);
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
-
     ImGuiIO& io = ImGui::GetIO();
-    std::string current_custom_font = "C:/Windows/Fonts/msyh.ttc";
 
+    // 字体加载辅助函数
     auto tryLoadFont = [](const char* path, const ImWchar* ranges) -> ImFont* {
         FILE* f = fopen(path, "rb");
         if (f) {
             fclose(f);
             ImFont* font = ImGui::GetIO().Fonts->AddFontFromFileTTF(path, 20.0f, nullptr, ranges);
-            if (font) {
-                std::printf("[INFO] Successfully loaded font: %s\n", path);
-                return font;
-            }
+            if (font) return font;
         }
-        std::printf("[WARN] Failed to load font: %s\n", path);
         return nullptr;
     };
 
-    ImFont* font_en = tryLoadFont("resources/Arial.ttf", io.Fonts->GetGlyphRangesCyrillic());
-    if (!font_en) font_en = io.Fonts->AddFontDefault();
-    
-    ImFont* font_zh = tryLoadFont(current_custom_font.c_str(), io.Fonts->GetGlyphRangesChineseFull());
-    if (!font_zh) font_zh = font_en;
-    
-    ImFont* font_jp = tryLoadFont("C:/Windows/Fonts/msgothic.ttc", io.Fonts->GetGlyphRangesJapanese());
-    if (!font_jp) font_jp = font_zh;
+    auto reloadFonts = [&](const std::string& custom_font_path) -> std::tuple<ImFont*, ImFont*, ImFont*> {
+        io.Fonts->Clear();
+        
+        ImFont* f_en = tryLoadFont("resources/fonts/Arial.ttf", io.Fonts->GetGlyphRangesCyrillic());
+        if (!f_en) f_en = io.Fonts->AddFontDefault();
+        
+        // 使用 Common (3500常用字) 既省内存又稳
+        ImFont* f_zh = tryLoadFont(custom_font_path.c_str(), io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+        if (!f_zh) f_zh = tryLoadFont("C:/Windows/Fonts/msyh.ttc", io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+        if (!f_zh) f_zh = f_en;
+        
+        ImFont* f_jp = tryLoadFont("C:/Windows/Fonts/msgothic.ttc", io.Fonts->GetGlyphRangesJapanese());
+        if (!f_jp) f_jp = f_zh;
+        
+        return {f_en, f_zh, f_jp};
+    };
+
+    std::string current_custom_font = "resources/fonts/Roboto-Medium.ttf";
+    if (FILE* f = fopen(current_custom_font.c_str(), "rb")) { fclose(f); } 
+    else { current_custom_font = "C:/Windows/Fonts/msyh.ttc"; }
+
+    auto [font_en, font_zh, font_jp] = reloadFonts(current_custom_font);
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
@@ -154,10 +156,19 @@ int main(int, char**) {
         }
     }
 
-    std::printf("[5] App initialized. Entering loop...\n"); std::fflush(stdout);
-
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
+
+        // 安全地在 NewFrame 之前处理字体重载
+        std::string pending = app.takePendingFontPath();
+        if (!pending.empty()) {
+            current_custom_font = pending;
+            std::tie(font_en, font_zh, font_jp) = reloadFonts(current_custom_font);
+            // 删除旧纹理，创建新纹理（必须在 NewFrame 之前）
+            ImGui_ImplOpenGL3_DestroyFontsTexture();
+            ImGui_ImplOpenGL3_CreateFontsTexture();
+        }
+
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();

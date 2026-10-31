@@ -51,6 +51,7 @@ public:
     bool isDecoding()     const { return state_ == State::DECODING; }
     bool isFileDecoding() const { return state_ == State::FILE_DECODING; }
     bool isRecording()    const { return recording_; }
+    std::string takePendingFontPath() { std::string p = pending_font_path_; pending_font_path_.clear(); return p; }
 
     void pushRawLine(const float* line_data, int sr);
     void setStatus(const std::string& s);
@@ -95,6 +96,8 @@ private:
     void _onSetRpm(float sec);
     void _onShowManual();
     void _onToggleRecord();
+    void _onLoadFont();
+    std::string pending_font_path_;
 
     // 线程、队列
     void _audioInputCallback(const float* samples, int n, int sr);
