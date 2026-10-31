@@ -104,7 +104,7 @@ void App::init() {
     main_win_.setChineseAvailable(chinese_available_);
 
     image_.init(settings_.image_width, settings_.max_lines);
-    demod_.setConfig({1500.0f, 2300.0f, 256, settings_.contrast});
+    demod_.setConfig({1500.0f, 2300.0f, 128, settings_.contrast});
     spectrum_.reset(new SpectrumDisplay(2048));
 
     rec_win_.setStrings("Recording##rec",
@@ -836,7 +836,7 @@ void App::_drawModalContrast() {
     if (ImGui::Button("OK", ImVec2(110, 0))) {
         settings_.contrast = std::clamp(modal_float_, 0.10f, 5.00f);
         settings_.is_binary_mode = modal_bool_;
-        demod_.setConfig({1500.0f, 2300.0f, 256, settings_.contrast});
+        demod_.setConfig({1500.0f, 2300.0f, 128, settings_.contrast});
         image_.reprocessAll(settings_.is_binary_mode);
         image_dirty_ = true;
         char buf[80];

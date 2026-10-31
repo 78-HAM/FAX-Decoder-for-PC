@@ -38,14 +38,15 @@ void FftKiss::forwardRealMagSq(const float* input, float* out_mag_sq) {
 
 Demodulator::Demodulator() { initWindow(); }
 Demodulator::Demodulator(const Config& cfg) : cfg_(cfg) { initWindow(); }
+
 void Demodulator::initWindow() {
-    int N = cfg_.window_size;
-    if (N < 8) N = 8;
-    if ((N % 2) != 0) N += 1;
+    // 强制回到 Python 原版的 N=128，无视外部 config 的 256
+    int N = 128;
     cfg_.window_size = N;
     window_.resize(N);
+    // Python: 0.54 - 0.46 * np.cos(2.0 * np.pi * np.arange(N) / (N - 1))
     for (int i = 0; i < N; ++i) {
-        window_[i] = 0.5f * (1.0f - std::cos(2.0f * kPi * (float)i / (float)(N - 1)));
+        window_[i] = 0.54f - 0.46f * std::cos(2.0f * kPi * (float)i / (float)(N - 1));
     }
 }
 
@@ -53,48 +54,40 @@ void Demodulator::demodulateLine(const float* buf, int len, int sr,
                                  int out_width, float* out) const {
     if (!out || out_width <= 0) return;
     if (!buf || len < 8 || sr <= 0) {
-        std::fill(out, out + out_width, 1.0f);
+        std::fill(out, out + out_width, 0.0f); // Python 默认返回 0
         return;
     }
 
-    if (!fft_ || fft_n_ != cfg_.window_size) {
-        fft_.reset(new FftKiss(cfg_.window_size));
-        fft_n_ = cfg_.window_size;
-        work_in_.resize(cfg_.window_size);
+    const int N = 128;
+    if (!fft_ || fft_n_ != N) {
+        fft_.reset(new FftKiss(N));
+        fft_n_ = N;
+        work_in_.resize(N);
         work_mag_.resize(fft_->nBins());
-        window_.resize(cfg_.window_size);
-        for (int i = 0; i < cfg_.window_size; ++i) {
-            window_[i] = 0.5f * (1.0f - std::cos(2.0f * kPi * (float)i / (float)(cfg_.window_size - 1)));
+        window_.resize(N);
+        for (int i = 0; i < N; ++i) {
+            window_[i] = 0.54f - 0.46f * std::cos(2.0f * kPi * (float)i / (float)(N - 1));
         }
     }
 
-    const int N  = cfg_.window_size;
     const int nb = fft_->nBins();
     const float samples_per_pixel = (float)len / (float)out_width;
     const float bin_hz = (float)sr / (float)N;
 
     int start_bin = std::max(1, (int)(cfg_.f_min / bin_hz) - 2);
     int end_bin   = std::min(nb - 2, (int)(cfg_.f_max / bin_hz) + 2);
-    if (end_bin < start_bin) end_bin = start_bin;
+    if (end_bin <= start_bin) end_bin = start_bin + 1;
+
+    const float contrast = cfg_.contrast;
 
     for (int i = 0; i < out_width; ++i) {
         float center = (float)i * samples_per_pixel + samples_per_pixel * 0.5f;
         int   start  = (int)(center - (float)N * 0.5f);
 
-        float energy = 0.0f;
         for (int j = 0; j < N; ++j) {
             int idx = start + j;
             float v = (idx >= 0 && idx < len) ? buf[idx] : 0.0f;
-            v *= window_[j];
-            work_in_[j] = v;
-            energy += v * v;
-        }
-        
-        // 能量门限：信号极弱或静音时，输出纯白 (1.0)
-        float rms = std::sqrt(energy / N);
-        if (rms < 100.0f) { 
-            out[i] = 1.0f; 
-            continue;
+            work_in_[j] = v * window_[j];
         }
 
         fft_->forwardRealMagSq(work_in_.data(), work_mag_.data());
@@ -118,16 +111,10 @@ void Demodulator::demodulateLine(const float* buf, int len, int sr,
             freq = ((float)peak_bin + p) * bin_hz;
         }
 
-        // 剔除超出 FAX 频段外的杂波/噪点，输出白色
-        if (freq < cfg_.f_min || freq > cfg_.f_max) {
-            out[i] = 1.0f;
-            continue;
-        }
-
-        // 恢复灰度映射，不再强加二值化
         float v = (freq - cfg_.f_min) / (cfg_.f_max - cfg_.f_min);
-        v = (v - (1.0f - cfg_.contrast)) / std::max(cfg_.contrast, 0.001f);
-        out[i] = std::clamp(v, 0.0f, 1.0f);
+        v = (v - (1.0f - contrast)) / std::max(contrast, 0.001f);
+        v = std::clamp(v, 0.0f, 1.0f);
+        out[i] = v;
     }
 }
 
