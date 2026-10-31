@@ -83,7 +83,7 @@ jobs:
         run: |
           mkdir -p dist
           cp build/bin/*.exe dist/ || cp build/*.exe dist/
-          if [ -d "fount" ]; then cp -r fount dist/; fi
+          if [ -d "resources" ]; then cp -r resources dist/; fi
           
           # 抓取 mingw 运行库 DLL
           ldd dist/*.exe | awk '/=>/ {print $3}' | grep -i "mingw" | while read dll; do cp "$dll" dist/; done
@@ -104,7 +104,7 @@ jobs:
         run: |
           mkdir -p dist
           cp build/bin/* dist/ || cp build/fax_decoder dist/
-          if [ -d "fount" ]; then cp -r fount dist/; fi
+          if [ -d "resources" ]; then cp -r resources dist/; fi
           cd dist && zip -9 ../fax-decoder-linux-${{ matrix.arch }}.zip *
           
       - name: Upload Artifact

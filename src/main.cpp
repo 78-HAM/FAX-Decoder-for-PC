@@ -124,7 +124,7 @@ int main(int, char**) {
         return nullptr;
     };
 
-    ImFont* font_en = tryLoadFont("fount/Arial.ttf", io.Fonts->GetGlyphRangesCyrillic());
+    ImFont* font_en = tryLoadFont("resources/Arial.ttf", io.Fonts->GetGlyphRangesCyrillic());
     if (!font_en) font_en = io.Fonts->AddFontDefault();
     
     ImFont* font_zh = tryLoadFont(current_custom_font.c_str(), io.Fonts->GetGlyphRangesChineseFull());
