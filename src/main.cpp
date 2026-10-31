@@ -50,7 +50,6 @@ static GlTexture g_img_tex;
 static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
     if (!pixels || w <= 0 || h <= 0) return (ImTextureID)0;
 
-    // 修复红线条：将单通道扩展为 RGBA 格式
     std::vector<uint8_t> rgba(w * h * 4);
     for (int i = 0; i < w * h; ++i) {
         rgba[i * 4 + 0] = pixels[i];
@@ -79,8 +78,11 @@ static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
 }
 
 int main(int, char**) {
+    std::printf("[1] App starting...\n"); std::fflush(stdout);
+
     glfwSetErrorCallback(glfw_error_cb);
     if (!glfwInit()) {
+        std::printf("[ERROR] GLFW Init failed.\n");
         std::system("pause");
         return 1;
     }
@@ -89,8 +91,10 @@ int main(int, char**) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
+    std::printf("[2] Creating window...\n"); std::fflush(stdout);
     GLFWwindow* window = glfwCreateWindow(1400, 820, "FAX Decoder", nullptr, nullptr);
     if (!window) {
+        std::printf("[ERROR] Window creation failed.\n");
         std::system("pause");
         glfwTerminate();
         return 1;
@@ -98,23 +102,36 @@ int main(int, char**) {
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
 
+    std::printf("[3] Init ImGui...\n"); std::fflush(stdout);
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
 
-    // --- 加载多语言字体 ---
     ImGuiIO& io = ImGui::GetIO();
     
-    // 英文和俄文用 Arial，包含 Cyrillic 字符集
-    ImFont* font_en = io.Fonts->AddFontFromFileTTF("fount/Arial.ttf", 20.0f, nullptr, io.Fonts->GetGlyphRangesCyrillic());
+    auto tryLoadFont = [](const char* path, const ImWchar* ranges) -> ImFont* {
+        FILE* f = fopen(path, "rb");
+        if (f) {
+            fclose(f);
+            ImFont* font = ImGui::GetIO().Fonts->AddFontFromFileTTF(path, 20.0f, nullptr, ranges);
+            if (font) {
+                std::printf("[INFO] Successfully loaded font: %s\n", path);
+                return font;
+            }
+        }
+        std::printf("[WARN] Failed to load font: %s\n", path);
+        return nullptr;
+    };
+
+    ImFont* font_en = tryLoadFont("fount/Arial.ttf", io.Fonts->GetGlyphRangesCyrillic());
     if (!font_en) font_en = io.Fonts->AddFontDefault();
     
-    // 中文用 Roboto-Medium
-    ImFont* font_zh = io.Fonts->AddFontFromFileTTF("fount/Roboto-Medium.ttf", 20.0f, nullptr, io.Fonts->GetGlyphRangesChineseFull());
+    ImFont* font_zh = tryLoadFont("fount/Roboto-Medium.ttf", io.Fonts->GetGlyphRangesChineseFull());
+    if (!font_zh) font_zh = tryLoadFont("C:/Windows/Fonts/msyh.ttc", io.Fonts->GetGlyphRangesChineseFull());
     if (!font_zh) font_zh = font_en;
     
-    // 日文用 Roboto-Medium
-    ImFont* font_jp = io.Fonts->AddFontFromFileTTF("fount/Roboto-Medium.ttf", 20.0f, nullptr, io.Fonts->GetGlyphRangesJapanese());
+    ImFont* font_jp = tryLoadFont("fount/Roboto-Medium.ttf", io.Fonts->GetGlyphRangesJapanese());
+    if (!font_jp) font_jp = tryLoadFont("C:/Windows/Fonts/msgothic.ttc", io.Fonts->GetGlyphRangesJapanese());
     if (!font_jp) font_jp = font_zh;
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -125,9 +142,8 @@ int main(int, char**) {
     App app;
     app.setTextureUploader(uploadGrayTexture);
     app.init();
-    app.setChineseAvailable(true); // 告知 UI 字体已就绪
+    app.setChineseAvailable(true);
 
-    // 演示图像
     {
         std::vector<float> demo_line(app.settings().image_width);
         for (int row = 0; row < 200; ++row) {
@@ -139,13 +155,14 @@ int main(int, char**) {
         }
     }
 
+    std::printf("[5] App initialized. Entering loop...\n"); std::fflush(stdout);
+
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        // 根据当前选择的语言，自动切换字体
         std::string lang = app.settings().language;
         if (lang == "zh-cn" || lang == "zh_CN" || lang == "zh-tw" || lang == "zh_TW") {
             ImGui::PushFont(font_zh);
