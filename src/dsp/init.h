@@ -38,7 +38,7 @@ public:
     struct Config {
         float f_min = 1500.0f;       // Hz
         float f_max = 2300.0f;       // Hz
-        int   window_size = 128;     // 每像素 FFT 点数
+        int   window_size = 256;     // 每像素 FFT 点数
         float contrast = 1.1f;       // 对比度
     };
 

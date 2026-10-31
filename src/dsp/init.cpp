@@ -72,23 +72,19 @@ void Demodulator::initWindow() {
 
 void Demodulator::demodulateLine(const float* buf, int len, int sr,
                                  int out_width, float* out) const {
-    if (!out || out_width <= 0) return;
-    if (!buf || len < 8 || sr <= 0) {
         std::fill(out, out + out_width, 0.0f);
         return;
     }
 
-    // 懒创建 FFT
-    if (!fft_ || fft_n_ != cfg_.window_size) {
         fft_.reset(new FftKiss(cfg_.window_size));
         fft_n_ = cfg_.window_size;
         work_in_.resize(cfg_.window_size);
         work_mag_.resize(fft_->nBins());
-        // 同时重建窗（cfg 可能被 setConfig 后改了 window_size）
         window_.resize(cfg_.window_size);
+        // 使用 Hann 窗（比 Hamming 窗旁瓣更低，有效减少频谱泄漏引起的波纹）
         for (int i = 0; i < cfg_.window_size; ++i) {
-            window_[i] = 0.54f - 0.46f * std::cos(2.0f * kPi * (float)i
-                                                  / (float)(cfg_.window_size - 1));
+            window_[i] = 0.5f * (1.0f - std::cos(2.0f * kPi * (float)i
+                                                / (float)(cfg_.window_size - 1)));
         }
     }
 
@@ -111,15 +107,24 @@ void Demodulator::demodulateLine(const float* buf, int len, int sr,
         float center = (float)i * samples_per_pixel + samples_per_pixel * 0.5f;
         int   start  = (int)(center - (float)N * 0.5f);
 
-        // 填窗（越界补零，等价 Python 的 valid 掩码）
+        float energy = 0.0f;
         for (int j = 0; j < N; ++j) {
             int idx = start + j;
             float v = (idx >= 0 && idx < len) ? buf[idx] : 0.0f;
-            work_in_[j] = v * window_[j];
+            v *= window_[j];
+            work_in_[j] = v;
+            energy += v * v;
         }
+        
+        // 能量门限：如果是静音或极低电平信号，直接输出白色（无噪点）
+        float rms = std::sqrt(energy / N);
+        if (rms < 10.0f) { 
+            out[i] = 1.0f; 
+            continue;
+        }
+
         fft_->forwardRealMagSq(work_in_.data(), work_mag_.data());
 
-        // 找峰值
         int peak_bin = start_bin;
         float peak_val = work_mag_[start_bin];
         for (int b = start_bin + 1; b <= end_bin; ++b) {
@@ -129,7 +134,6 @@ void Demodulator::demodulateLine(const float* buf, int len, int sr,
             }
         }
 
-        // 抛物线插值
         float freq = (float)peak_bin * bin_hz;
         if (peak_bin > 0 && peak_bin < nb - 1) {
             float alpha = work_mag_[peak_bin - 1];
@@ -140,7 +144,6 @@ void Demodulator::demodulateLine(const float* buf, int len, int sr,
             freq = ((float)peak_bin + p) * bin_hz;
         }
 
-        // 归一化（与 Python 一致）
         float v = (freq - cfg_.f_min) / (cfg_.f_max - cfg_.f_min);
         v = (v - (1.0f - contrast)) / std::max(contrast, 0.001f);
         v = std::clamp(v, 0.0f, 1.0f);
