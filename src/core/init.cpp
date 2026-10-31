@@ -286,7 +286,7 @@ void App::_checkUpdateResult() {
 void App::pushRawLine(const float* line_data, int sr) {
     if (!line_data) return;
     std::vector<float> demod_out((size_t)settings_.image_width);
-    demod_.demodulateLine(line_data, sr, 48000,
+    demod_.demodulateLine(line_data, sr, sr,
                           settings_.image_width, demod_out.data());
 
     if (image_.currentLines() >= settings_.max_lines) return;

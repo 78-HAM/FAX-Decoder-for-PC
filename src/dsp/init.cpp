@@ -9,24 +9,15 @@ static constexpr float kPi = 3.14159265358979323846f;
 // FftKiss
 // ============================================================
 FftKiss::FftKiss(int n) : n_(n) {
-    if (n_ <= 0 || (n_ % 2) != 0) {
-        n_ = 0;
-        return;
-    }
+    if (n_ <= 0 || (n_ % 2) != 0) { n_ = 0; return; }
     cfg_ = kiss_fftr_alloc(n_, 0, nullptr, nullptr);
-    if (!cfg_) {
-        n_ = 0;
-        return;
-    }
+    if (!cfg_) { n_ = 0; return; }
     time_buf_.resize(n_);
     freq_buf_.resize(n_ / 2 + 1);
 }
 
 FftKiss::~FftKiss() {
-    if (cfg_) {
-        kiss_fftr_free(cfg_);
-        cfg_ = nullptr;
-    }
+    if (cfg_) { kiss_fftr_free(cfg_); cfg_ = nullptr; }
 }
 
 void FftKiss::forwardReal(const float* input, float* out_re, float* out_im) {
@@ -73,17 +64,15 @@ void Demodulator::demodulateLine(const float* buf, int len, int sr,
                                  int out_width, float* out) const {
     if (!out || out_width <= 0) return;
     if (!buf || len < 8 || sr <= 0) {
-        std::fill(out, out + out_width, 0.0f);
+        std::fill(out, out + out_width, 1.0f);
         return;
     }
 
-    // 懒创建 FFT
     if (!fft_ || fft_n_ != cfg_.window_size) {
         fft_.reset(new FftKiss(cfg_.window_size));
         fft_n_ = cfg_.window_size;
         work_in_.resize(cfg_.window_size);
         work_mag_.resize(fft_->nBins());
-        // 重建窗
         window_.resize(cfg_.window_size);
         for (int i = 0; i < cfg_.window_size; ++i) {
             window_[i] = 0.5f * (1.0f - std::cos(2.0f * kPi * (float)i / (float)(cfg_.window_size - 1)));
@@ -98,13 +87,8 @@ void Demodulator::demodulateLine(const float* buf, int len, int sr,
     int start_bin = std::max(1, (int)(cfg_.f_min / bin_hz) - 2);
     int end_bin   = std::min(nb - 2, (int)(cfg_.f_max / bin_hz) + 2);
     if (end_bin < start_bin) end_bin = start_bin;
-    if (start_bin >= nb) {
-        std::fill(out, out + out_width, 0.0f);
-        return;
-    }
 
-    const float contrast = cfg_.contrast;
-
+    // 计算整行（全频段）的能量基准
     for (int i = 0; i < out_width; ++i) {
         float center = (float)i * samples_per_pixel + samples_per_pixel * 0.5f;
         int   start  = (int)(center - (float)N * 0.5f);
@@ -118,9 +102,9 @@ void Demodulator::demodulateLine(const float* buf, int len, int sr,
             energy += v * v;
         }
         
-        // 能量门限：静音时直接返回白色（1.0），防止噪点
+        // 提高静音/底噪门限：如果没有信号，强行输出纯白 (1.0)
         float rms = std::sqrt(energy / N);
-        if (rms < 10.0f) { 
+        if (rms < 50.0f) { 
             out[i] = 1.0f; 
             continue;
         }
@@ -147,9 +131,14 @@ void Demodulator::demodulateLine(const float* buf, int len, int sr,
         }
 
         float v = (freq - cfg_.f_min) / (cfg_.f_max - cfg_.f_min);
-        v = (v - (1.0f - contrast)) / std::max(contrast, 0.001f);
-        v = std::clamp(v, 0.0f, 1.0f);
-        out[i] = v;
+        
+        // 强制加强对比度，直接把灰度干掉，变成纯黑或纯白
+        v = (v - (1.0f - cfg_.contrast)) / std::max(cfg_.contrast, 0.001f);
+        if (v > 0.5f) {
+            out[i] = 1.0f; // 白
+        } else {
+            out[i] = 0.0f; // 黑
+        }
     }
 }
 
@@ -167,8 +156,7 @@ SpectrumDisplay::SpectrumDisplay(int fft_size)
     tmp_work_.resize(fft_size_);
     tmp_mag_.resize(fft_size_ / 2 + 1);
     for (int i = 0; i < fft_size_; ++i) {
-        window_[i] = 0.5f * (1.0f - std::cos(2.0f * kPi * (float)i
-                                            / (float)(fft_size_ - 1)));
+        window_[i] = 0.5f * (1.0f - std::cos(2.0f * kPi * (float)i / (float)(fft_size_ - 1)));
     }
 }
 
@@ -195,8 +183,6 @@ void SpectrumDisplay::computeSpectrum() {
     fft_.forwardRealMagSq(tmp_work_.data(), tmp_mag_.data());
 
     int nb_half = fft_size_ / 2;
-    if ((int)tmp_mag_.size() < nb_half) nb_half = (int)tmp_mag_.size();
-
     float max_db = -1e9f;
     for (int i = 0; i < nb_half; ++i) {
         float abs_val = std::sqrt(tmp_mag_[i]);
@@ -232,21 +218,11 @@ void SpectrumDisplay::reset() {
 // DspUtil
 // ============================================================
 namespace DspUtil {
-
-void resampleSpectrumToBars(const float* spec, int n_bins,
-                            int sr, int fft_size,
-                            float max_hz,
-                            float* out, int n_out) {
-    if (!spec || n_bins <= 0 || sr <= 0 || fft_size <= 0 ||
-        n_out <= 0 || !out) {
-        return;
-    }
+void resampleSpectrumToBars(const float* spec, int n_bins, int sr, int fft_size, float max_hz, float* out, int n_out) {
+    if (!spec || n_bins <= 0 || sr <= 0 || fft_size <= 0 || n_out <= 0 || !out) return;
     const float bin_hz = (float)sr / (float)fft_size;
     int active = std::min(n_bins - 1, (int)(max_hz / std::max(bin_hz, 1e-6f)));
-    if (active <= 0) {
-        std::fill(out, out + n_out, 0.0f);
-        return;
-    }
+    if (active <= 0) { std::fill(out, out + n_out, 0.0f); return; }
     for (int i = 0; i < n_out; ++i) {
         float t = ((float)i + 0.5f) / (float)n_out * (float)active;
         int j = (int)t;
@@ -255,5 +231,4 @@ void resampleSpectrumToBars(const float* spec, int n_bins,
         out[i] = spec[j];
     }
 }
-
-} // namespace DspUtil
+}
