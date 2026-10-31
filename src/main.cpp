@@ -92,8 +92,8 @@ int main(int, char**) {
         ImFont* f_en = tryLoadFont("resources/fonts/Arial.ttf", io.Fonts->GetGlyphRangesCyrillic());
         if (!f_en) f_en = io.Fonts->AddFontDefault();
         
-        ImFont* f_zh = tryLoadFont(custom_font_path.c_str(), io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
-        if (!f_zh) f_zh = tryLoadFont("C:/Windows/Fonts/msyh.ttc", io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+        ImFont* f_zh = tryLoadFont(custom_font_path.c_str(), io.Fonts->GetGlyphRangesChineseFull());
+        if (!f_zh) f_zh = tryLoadFont("C:/Windows/Fonts/msyh.ttc", io.Fonts->GetGlyphRangesChineseFull());
         if (!f_zh) f_zh = f_en;
         
         ImFont* f_jp = tryLoadFont("C:/Windows/Fonts/msgothic.ttc", io.Fonts->GetGlyphRangesJapanese());
