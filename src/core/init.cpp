@@ -1013,25 +1013,20 @@ void App::_drawModalSaveRecord() {
 // ============================================================
 void App::_drawFileDialog() {
 #ifdef HAVE_IMGUI_FILE_DIALOG
-    if (!file_dialog_open_) return;
-    if (!IGFD::FileDialog::Instance()->IsDialogOpen("ChooseAudio")) {
-        file_dialog_open_ = false;
-        return;
-    }
-    IGFD::FileDialog::Instance()->Display("ChooseAudio");
-    if (IGFD::FileDialog::Instance()->IsDialogClosed("ChooseAudio")) {
-        if (auto* result = IGFD::FileDialog::Instance()->GetDialogResult("ChooseAudio")) {
-            current_file_ = result->filePathName;
+    if (IGFD::FileDialog::Instance()->Display("ChooseAudio")) {
+        if (IGFD::FileDialog::Instance()->IsOk()) {
+            std::string filePathName = IGFD::FileDialog::Instance()->GetFilePathName();
+            current_file_ = filePathName;
             has_file_ = true;
             main_win_.setHasFile(true);
             std::string name = current_file_;
-            auto slash = name.find_last_of("/\\");
+            auto slash = name.find_last_of("/\");
             if (slash != std::string::npos) name = name.substr(slash + 1);
             main_win_.setFileName(name);
             setStatus(std::string(i18n_.t("status.loading_file")) + ": " + name);
         }
-        IGFD::FileDialog::Instance()->Close();
         file_dialog_open_ = false;
+        IGFD::FileDialog::Instance()->Close();
     }
 #endif
 }
