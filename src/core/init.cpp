@@ -164,7 +164,7 @@ void App::_audioInputCallback(const float* samples, int n, int sr) {
         }
     }
 
-    if (!input_resampler_) return;
+    std::lock_guard<std::mutex> lk_acc(line_acc_mutex_);
     input_resampler_->put(samples, n);
 
     std::vector<float> out_buf(n * 2 + 64);
@@ -289,7 +289,7 @@ void App::pushRawLine(const float* line_data, int sr) {
     demod_.demodulateLine(line_data, sr, sr,
                           settings_.image_width, demod_out.data());
 
-    if (image_.currentLines() >= settings_.max_lines) return;
+    if (image_.currentLines() >= image_.maxLines()) return;
     image_.pushLine(demod_out.data(), settings_.image_width,
                     settings_.is_binary_mode);
 
@@ -479,10 +479,13 @@ void App::_onStart() {
         return;
     }
 
-    input_resampler_.reset(new Resampler(48000, TARGET_SAMPLE_RATE));
-    target_line_len_ = (int)(TARGET_SAMPLE_RATE * settings_.seconds_per_line);
-    line_acc_.assign(target_line_len_, 0.0f);
-    line_acc_count_ = 0;
+    {
+        std::lock_guard<std::mutex> lk(line_acc_mutex_);
+        input_resampler_.reset(new Resampler(48000, TARGET_SAMPLE_RATE));
+        target_line_len_ = (int)(TARGET_SAMPLE_RATE * settings_.seconds_per_line);
+        line_acc_.assign(target_line_len_, 0.0f);
+        line_acc_count_ = 0;
+    }
 
     bool ok = audio_input_.start(
         settings_.selected_audio_device, 48000, 1024,
@@ -501,6 +504,12 @@ void App::_onStart() {
 void App::_onStop() {
     if (state_ == State::DECODING) {
         audio_input_.stop();
+        {
+            std::lock_guard<std::mutex> lk(line_acc_mutex_);
+            input_resampler_.reset();
+            line_acc_.clear();
+            line_acc_count_ = 0;
+        }
         state_ = State::IDLE;
         main_win_.setDecoding(false);
         setStatus(i18n_.t("status.stopped"));

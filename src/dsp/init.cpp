@@ -5,9 +5,6 @@
 
 static constexpr float kPi = 3.14159265358979323846f;
 
-// ============================================================
-// FftKiss
-// ============================================================
 FftKiss::FftKiss(int n) : n_(n) {
     if (n_ <= 0 || (n_ % 2) != 0) { n_ = 0; return; }
     cfg_ = kiss_fftr_alloc(n_, 0, nullptr, nullptr);
@@ -15,10 +12,7 @@ FftKiss::FftKiss(int n) : n_(n) {
     time_buf_.resize(n_);
     freq_buf_.resize(n_ / 2 + 1);
 }
-
-FftKiss::~FftKiss() {
-    if (cfg_) { kiss_fftr_free(cfg_); cfg_ = nullptr; }
-}
+FftKiss::~FftKiss() { if (cfg_) { kiss_fftr_free(cfg_); cfg_ = nullptr; } }
 
 void FftKiss::forwardReal(const float* input, float* out_re, float* out_im) {
     if (!cfg_ || !input) return;
@@ -30,25 +24,20 @@ void FftKiss::forwardReal(const float* input, float* out_re, float* out_im) {
         if (out_im) out_im[i] = (float)freq_buf_[i].i;
     }
 }
-
 void FftKiss::forwardRealMagSq(const float* input, float* out_mag_sq) {
     if (!cfg_ || !input || !out_mag_sq) return;
     for (int i = 0; i < n_; ++i) time_buf_[i] = (kiss_fft_scalar)input[i];
     kiss_fftr(cfg_, time_buf_.data(), freq_buf_.data());
     int nb = n_ / 2 + 1;
     for (int i = 0; i < nb; ++i) {
-        float r  = (float)freq_buf_[i].r;
+        float r = (float)freq_buf_[i].r;
         float im = (float)freq_buf_[i].i;
         out_mag_sq[i] = r * r + im * im;
     }
 }
 
-// ============================================================
-// Demodulator
-// ============================================================
 Demodulator::Demodulator() { initWindow(); }
 Demodulator::Demodulator(const Config& cfg) : cfg_(cfg) { initWindow(); }
-
 void Demodulator::initWindow() {
     int N = cfg_.window_size;
     if (N < 8) N = 8;
@@ -88,7 +77,6 @@ void Demodulator::demodulateLine(const float* buf, int len, int sr,
     int end_bin   = std::min(nb - 2, (int)(cfg_.f_max / bin_hz) + 2);
     if (end_bin < start_bin) end_bin = start_bin;
 
-    // 计算整行（全频段）的能量基准
     for (int i = 0; i < out_width; ++i) {
         float center = (float)i * samples_per_pixel + samples_per_pixel * 0.5f;
         int   start  = (int)(center - (float)N * 0.5f);
@@ -102,9 +90,9 @@ void Demodulator::demodulateLine(const float* buf, int len, int sr,
             energy += v * v;
         }
         
-        // 提高静音/底噪门限：如果没有信号，强行输出纯白 (1.0)
+        // 能量门限：信号极弱或静音时，输出纯白 (1.0)
         float rms = std::sqrt(energy / N);
-        if (rms < 50.0f) { 
+        if (rms < 100.0f) { 
             out[i] = 1.0f; 
             continue;
         }
@@ -130,23 +118,20 @@ void Demodulator::demodulateLine(const float* buf, int len, int sr,
             freq = ((float)peak_bin + p) * bin_hz;
         }
 
-        float v = (freq - cfg_.f_min) / (cfg_.f_max - cfg_.f_min);
-        
-        // 强制加强对比度，直接把灰度干掉，变成纯黑或纯白
-        v = (v - (1.0f - cfg_.contrast)) / std::max(cfg_.contrast, 0.001f);
-        if (v > 0.5f) {
-            out[i] = 1.0f; // 白
-        } else {
-            out[i] = 0.0f; // 黑
+        // 剔除超出 FAX 频段外的杂波/噪点，输出白色
+        if (freq < cfg_.f_min || freq > cfg_.f_max) {
+            out[i] = 1.0f;
+            continue;
         }
+
+        // 恢复灰度映射，不再强加二值化
+        float v = (freq - cfg_.f_min) / (cfg_.f_max - cfg_.f_min);
+        v = (v - (1.0f - cfg_.contrast)) / std::max(cfg_.contrast, 0.001f);
+        out[i] = std::clamp(v, 0.0f, 1.0f);
     }
 }
 
-// ============================================================
-// SpectrumDisplay
-// ============================================================
-SpectrumDisplay::SpectrumDisplay(int fft_size)
-    : fft_size_(fft_size), fft_(fft_size) {
+SpectrumDisplay::SpectrumDisplay(int fft_size) : fft_size_(fft_size), fft_(fft_size) {
     if (fft_size_ < 64) fft_size_ = 64;
     if ((fft_size_ % 2) != 0) fft_size_ += 1;
     ring_.assign(fft_size_, 0.0f);
@@ -214,9 +199,6 @@ void SpectrumDisplay::reset() {
     ring_pos_ = 0;
 }
 
-// ============================================================
-// DspUtil
-// ============================================================
 namespace DspUtil {
 void resampleSpectrumToBars(const float* spec, int n_bins, int sr, int fft_size, float max_hz, float* out, int n_out) {
     if (!spec || n_bins <= 0 || sr <= 0 || fft_size <= 0 || n_out <= 0 || !out) return;

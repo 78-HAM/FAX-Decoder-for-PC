@@ -57,7 +57,7 @@ static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
         rgba[i * 4 + 2] = pixels[i];
         rgba[i * 4 + 3] = 255;
     }
-    if (g_img_tex.id == 0 || g_img_tex.w != w || g_img_tex.h != h) {
+    if (g_img_tex.id == 0 || g_img_tex.w != w || g_img_tex.h < h) {
         if (g_img_tex.id) glDeleteTextures(1, &g_img_tex.id);
         glGenTextures(1, &g_img_tex.id);
         glBindTexture(GL_TEXTURE_2D, g_img_tex.id);
@@ -65,14 +65,16 @@ static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+        
+        int alloc_h = std::max(5000, h);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, alloc_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         g_img_tex.w = w;
-        g_img_tex.h = h;
-    } else {
-        glBindTexture(GL_TEXTURE_2D, g_img_tex.id);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+        g_img_tex.h = alloc_h;
     }
+    
+    glBindTexture(GL_TEXTURE_2D, g_img_tex.id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
     return (ImTextureID)(intptr_t)g_img_tex.id;
 }
 
