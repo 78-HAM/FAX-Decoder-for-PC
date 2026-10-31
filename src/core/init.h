@@ -51,7 +51,12 @@ public:
     bool isDecoding()     const { return state_ == State::DECODING; }
     bool isFileDecoding() const { return state_ == State::FILE_DECODING; }
     bool isRecording()    const { return recording_; }
-    std::string takePendingFontPath() { std::string p = pending_font_path_; pending_font_path_.clear(); return p; }
+    
+    std::string takePendingFontPath() { 
+        std::string p = pending_font_path_; 
+        pending_font_path_.clear(); 
+        return p; 
+    }
 
     void pushRawLine(const float* line_data, int sr);
     void setStatus(const std::string& s);
@@ -74,7 +79,6 @@ private:
     void _bindCalibHooks();
     void _bindFineTuneHooks();
 
-    // MainWindow 回调
     void _onStart();
     void _onStop();
     void _onClear();
@@ -85,7 +89,6 @@ private:
     void _onOpenRecord();
     void _onShowAbout();
     void _onCheckUpdate();
-    void _onResetAudioDevice();
     void _onSelectAudioDevice();
     void _onSetSpectrumDecay();
     void _onSetImageWidth();
@@ -97,23 +100,17 @@ private:
     void _onShowManual();
     void _onToggleRecord();
     void _onLoadFont();
-    std::string pending_font_path_;
 
-    // 线程、队列
     void _audioInputCallback(const float* samples, int n, int sr);
     void _fileDecodeWorker(AudioFile file);
     void _consumeLineQueue();
     void _consumeRawForSpectrum();
     void _checkUpdateResult();
 
-    // 频谱
     void _updateSpectrumBars(float* out, int n);
-
-    // 纹理
     void _markImageDirty() { image_dirty_ = true; }
     void _uploadImageIfDirty();
 
-    // 模态框
     void _drawModals();
     void _openModal(ModalId id);
     void _drawModalSpectrum();
@@ -125,14 +122,15 @@ private:
     void _drawModalSaveRecord();
     void _drawFileDialog();
 
-    // 状态
     State  state_ = State::IDLE;
     bool   recording_ = false;
     bool   wants_close_ = false;
     bool   has_file_ = false;
     bool   image_dirty_ = true;
+    bool   chinese_available_ = false;
     std::string status_;
     std::string current_file_;
+    std::string pending_font_path_;
 
     AppSettings settings_;
     I18n        i18n_;
@@ -147,46 +145,38 @@ private:
 
     float spectrum_bars_[128] = {};
 
-    // 校准临时值
     bool  is_manual_ = false;
     float temp_skew_ = 0.0f;
     float temp_offset_ = 0.0f;
     int   temp_split_line_ = 0;
 
-    bool chinese_available_ = false;
     TextureUploader texture_uploader_;
     ImTextureID image_tex_ = nullptr;
     int image_tex_w_ = 0;
     int image_tex_h_ = 0;
 
-    // 音频输入
     PortAudioInput audio_input_;
     std::unique_ptr<Resampler> input_resampler_;
     std::vector<float> line_acc_;
     int line_acc_count_ = 0;
     int target_line_len_ = 0;
 
-    // 文件解码
     std::thread file_thread_;
     std::atomic<bool> file_decode_stop_{false};
 
-    // 线程安全队列
     std::mutex line_queue_mutex_;
     std::deque<std::vector<float>> line_queue_;
 
     std::mutex raw_samples_mutex_;
     std::vector<float> raw_samples_;
 
-    // 录音
     Recorder recorder_;
     std::string last_record_path_;
 
-    // 更新检查
     std::mutex update_result_mutex_;
     UpdateInfo update_result_;
     bool update_result_ready_ = false;
 
-    // 模态状态
     ModalId modal_id_ = MODAL_NONE;
     bool modal_need_open_ = false;
     char modal_buf_[512] = {};
@@ -197,6 +187,5 @@ private:
     std::vector<std::pair<int, std::string>> modal_devices_;
     int modal_selected_device_ = -1;
 
-    // 文件对话框
     bool file_dialog_open_ = false;
 };

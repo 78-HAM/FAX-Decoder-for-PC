@@ -1,6 +1,6 @@
-#include "util/NativeFileDialog.h"
 #include "core/init.h"
 #include "util/ImageIO.h"
+#include "util/NativeFileDialog.h"
 #ifdef HAVE_IMGUI_FILE_DIALOG
 #include "ImGuiFileDialog.h"
 #endif
@@ -48,6 +48,7 @@ const std::unordered_map<std::string, TR5>& trTable() {
         {"status.loading_file",          {"File selected", "已选文件", "Файл выбран", "ファイル選択", "已選檔案"}},
         {"status.exited_calib",          {"Calibration exited", "已退出校准", "Калибровка завершена", "キャリブレーション終了", "已離開校正"}},
         {"status.manual_applied",        {"Manual adjustment applied", "手动调整已应用", "Ручная настройка применена", "手動調整適用", "手動調整已套用"}},
+        {"status.manual_saved",          {"Manual RAW saved: ", "手动 RAW 已保存：", "Ручной RAW сохранён: ", "手動 RAW 保存済: ", "手動 RAW 已儲存："}},
         {"status.split_line",            {"Split line", "分割线", "Линия раздела", "分割線", "分割線"}},
         {"status.no_image",              {"No image data", "尚无图像数据", "Нет данных", "画像データなし", "尚無圖片資料"}},
         {"status.no_file",               {"No file selected", "未选择文件", "Файл не выбран", "ファイル未選択", "未選擇檔案"}},
@@ -92,7 +93,7 @@ const std::vector<std::pair<std::string, std::string>>& I18n::languages() {
 }
 
 // ============================================================
-// App - 初始化
+// App
 // ============================================================
 void App::init() {
     std::string cfg_path = SettingsIO::defaultPath();
@@ -134,11 +135,7 @@ void App::setStatus(const std::string& s) {
     main_win_.setStatus(s);
 }
 
-// ============================================================
-// App - 每帧主循环
-// ============================================================
 void App::update() {
-    // 音频输入 / 文件解码产生的行，在主线程消费
     _consumeLineQueue();
     _consumeRawForSpectrum();
     _checkUpdateResult();
@@ -150,18 +147,13 @@ void App::update() {
     fine_win_.draw();
     rec_win_.draw();
 
-    // 模态框 & 文件对话框必须在窗口之后
     _drawFileDialog();
     _drawModals();
 }
 
-// ============================================================
-// 音频输入回调（worker 线程）
-// ============================================================
 void App::_audioInputCallback(const float* samples, int n, int sr) {
     if (!samples || n <= 0) return;
 
-    // 频谱用原始样本
     {
         std::lock_guard<std::mutex> lk(raw_samples_mutex_);
         raw_samples_.insert(raw_samples_.end(), samples, samples + n);
@@ -172,7 +164,6 @@ void App::_audioInputCallback(const float* samples, int n, int sr) {
         }
     }
 
-    // 重采样
     if (!input_resampler_) return;
     input_resampler_->put(samples, n);
 
@@ -198,9 +189,6 @@ void App::_audioInputCallback(const float* samples, int n, int sr) {
     }
 }
 
-// ============================================================
-// 文件解码线程
-// ============================================================
 void App::_fileDecodeWorker(AudioFile file) {
     Resampler rs(file.sample_rate, TARGET_SAMPLE_RATE);
     int target_len = (int)(TARGET_SAMPLE_RATE * settings_.seconds_per_line);
@@ -212,15 +200,6 @@ void App::_fileDecodeWorker(AudioFile file) {
     std::vector<float> line_acc(target_len);
     int line_count = 0;
     std::vector<float> out_buf(8192);
-
-    auto flush_line = [&]() {
-        std::lock_guard<std::mutex> lk(line_queue_mutex_);
-        while (line_queue_.size() >= 32 && !file_decode_stop_.load()) {
-            // 队列满，暂停（睡一小会儿）
-            // 这里用简单自旋+睡眠，主线程会尽快消费
-        }
-        line_queue_.emplace_back(line_acc.begin(), line_acc.end());
-    };
 
     while (!file_decode_stop_.load()) {
         int got = rs.getOutput(out_buf.data(), (int)out_buf.size());
@@ -235,7 +214,6 @@ void App::_fileDecodeWorker(AudioFile file) {
             pos += take;
 
             if (line_count >= target_len) {
-                // 队列满时等主线程消费
                 int wait_count = 0;
                 while (!file_decode_stop_.load()) {
                     {
@@ -243,7 +221,7 @@ void App::_fileDecodeWorker(AudioFile file) {
                         if (line_queue_.size() < 32) break;
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(5));
-                    if (++wait_count > 2000) break;  // 10 秒超时
+                    if (++wait_count > 2000) break;
                 }
                 if (file_decode_stop_.load()) break;
 
@@ -254,16 +232,12 @@ void App::_fileDecodeWorker(AudioFile file) {
         }
     }
 
-    // 处理剩余的尾部
     if (!file_decode_stop_.load() && line_count > 0) {
         std::lock_guard<std::mutex> lk(line_queue_mutex_);
         line_queue_.emplace_back(line_acc.begin(), line_acc.end());
     }
 }
 
-// ============================================================
-// 主线程消费队列
-// ============================================================
 void App::_consumeLineQueue() {
     const int kMaxPerFrame = 20;
     int count = 0;
@@ -279,20 +253,6 @@ void App::_consumeLineQueue() {
         ++count;
     }
     if (count > 0) image_dirty_ = true;
-
-    // 文件解码结束检测
-    if (state_ == State::FILE_DECODING) {
-        bool finished = false;
-        if (file_thread_.joinable()) {
-            // 检查队列空 + 线程结束（用 minimal 状态推断）
-            std::lock_guard<std::mutex> lk(line_queue_mutex_);
-            if (line_queue_.empty()) {
-                finished = true;  // 简单判断：队列空 + 状态仍是 FILE_DECODING 视为可能的结束
-            }
-        }
-        // 不在这里 join，由 _onStop 或结束后手动处理
-        (void)finished;
-    }
 }
 
 void App::_consumeRawForSpectrum() {
@@ -323,27 +283,20 @@ void App::_checkUpdateResult() {
     }
 }
 
-// ============================================================
-// 推一行原始音频 → 解调 → 写入 image
-// ============================================================
 void App::pushRawLine(const float* line_data, int sr) {
     if (!line_data) return;
     std::vector<float> demod_out((size_t)settings_.image_width);
     demod_.demodulateLine(line_data, sr, 48000,
                           settings_.image_width, demod_out.data());
 
-    {
-        if (image_.currentLines() >= settings_.max_lines) return;
-        image_.pushLine(demod_out.data(), settings_.image_width,
-                        settings_.is_binary_mode);
-    }
+    if (image_.currentLines() >= settings_.max_lines) return;
+    image_.pushLine(demod_out.data(), settings_.image_width,
+                    settings_.is_binary_mode);
+
     image_dirty_ = true;
     main_win_.setHasImage(true);
 }
 
-// ============================================================
-// 频谱条
-// ============================================================
 void App::_updateSpectrumBars(float* out, int n) {
     DspUtil::resampleSpectrumToBars(
         spectrum_->displayData(), spectrum_->nBins(),
@@ -368,13 +321,11 @@ void App::_uploadImageIfDirty() {
     image_dirty_ = false;
 }
 
-// ============================================================
-// 回调绑定
-// ============================================================
 void App::_bindCallbacks() {
     MainWindowCallbacks cb;
+    cb.onStart            = [this]() { _onStart(); };
+    cb.onStop             = [this]() { _onStop(); };
     cb.onToggleDecode     = [this]() { if (state_ == State::IDLE) _onStart(); else _onStop(); };
-    cb.onLoadFont         = [this]() { _onLoadFont(); };
     cb.onClear            = [this]() { _onClear(); };
     cb.onExit             = [this]() { _onExit(); };
     cb.onOpenRecord       = [this]() { _onOpenRecord(); };
@@ -392,6 +343,7 @@ void App::_bindCallbacks() {
     cb.onStartStartPointCalib  = [this]() { _onStartStartPointCalib(); };
     cb.onSetRpm           = [this](float s) { _onSetRpm(s); };
     cb.onShowManual       = [this]() { _onShowManual(); };
+    cb.onLoadFont         = [this]() { _onLoadFont(); };
     cb.getSpectrum        = [this](float* out, int n) { _updateSpectrumBars(out, n); };
 
     main_win_.setCallbacks(cb);
@@ -422,7 +374,6 @@ void App::_bindCalibHooks() {
         }
         image_.reprocessAll(settings_.is_binary_mode);
         image_dirty_ = true;
-        if (calib_win_.active()) calib_win_.exitCalib();
     };
 
     hk.applyStartPoint = [this](float x_img) {
@@ -435,11 +386,9 @@ void App::_bindCalibHooks() {
         }
         image_.reprocessAll(settings_.is_binary_mode);
         image_dirty_ = true;
-        if (calib_win_.active()) calib_win_.exitCalib();
     };
 
     hk.commitManual = [this]() {
-        // 1. 保存原始 RAW 数据（不包含校准）
         auto& raws = image_.rawLines();
         if (!raws.empty()) {
             char filename[256];
@@ -464,7 +413,6 @@ void App::_bindCalibHooks() {
             }
         }
 
-        // 2. 应用分割
         image_.addSegment({temp_split_line_, temp_skew_, temp_offset_});
         image_.reprocessAll(settings_.is_binary_mode);
         is_manual_ = false;
@@ -523,9 +471,6 @@ void App::_bindFineTuneHooks() {
     fine_win_.setCallbacks(fcb);
 }
 
-// ============================================================
-// 启动 / 停止
-// ============================================================
 void App::_onStart() {
     if (state_ == State::DECODING) {
         setStatus(i18n_.t("status.already_decoding"));
@@ -589,9 +534,6 @@ void App::_onClear() {
     setStatus(i18n_.t("status.cleared"));
 }
 
-// ============================================================
-// 文件选择 / 文件解码
-// ============================================================
 void App::_onPickFile() {
     std::string path = NativeFileDialog::openFile("Select Audio File", "Audio Files\0*.wav;*.mp3;*.flac\0All Files\0*.*\0");
     if (!path.empty()) {
@@ -623,7 +565,6 @@ void App::_onStartFileDecode() {
         return;
     }
 
-    // 清空旧图
     image_.clear();
     {
         std::lock_guard<std::mutex> lk(line_queue_mutex_);
@@ -647,9 +588,6 @@ void App::_onStartFileDecode() {
     file_thread_ = std::thread(&App::_fileDecodeWorker, this, std::move(file));
 }
 
-// ============================================================
-// 保存图像
-// ============================================================
 void App::_onSaveImage() {
     if (image_.empty()) {
         setStatus(i18n_.t("status.no_image"));
@@ -681,13 +619,11 @@ void App::_onExit() { wants_close_ = true; }
 
 void App::_onLoadFont() {
     std::string path = NativeFileDialog::openFile("Select Custom Font", "Font Files\0*.ttf;*.ttc;*.otf\0All Files\0*.*\0");
+    if (!path.empty()) {
         pending_font_path_ = path;
     }
 }
 
-// ============================================================
-// 录音
-// ============================================================
 void App::_onOpenRecord() { rec_win_.show(); }
 
 void App::_onToggleRecord() {
@@ -696,7 +632,6 @@ void App::_onToggleRecord() {
         recording_ = false;
         last_record_path_ = recorder_.tempPath();
         if (!last_record_path_.empty()) {
-            // 直接保存到 HOME，避免额外对话框
             const char* home = std::getenv("HOME");
             if (!home) home = ".";
             char fn[256];
@@ -722,9 +657,6 @@ void App::_onToggleRecord() {
     }
 }
 
-// ============================================================
-// 关于 / 更新 / 设备
-// ============================================================
 void App::_onShowAbout() {
     _openModal(MODAL_ABOUT);
 }
@@ -732,16 +664,11 @@ void App::_onShowAbout() {
 void App::_onCheckUpdate() {
     setStatus(i18n_.t("status.update_checking"));
     std::thread([this]() {
-        UpdateInfo info = Updater::check("1.0.1");
+        UpdateInfo info = Updater::check("2.0.0");
         std::lock_guard<std::mutex> lk(update_result_mutex_);
         update_result_ = info;
         update_result_ready_ = true;
     }).detach();
-}
-
-void App::_onResetAudioDevice() {
-    settings_.selected_audio_device = -1;
-    setStatus(i18n_.t("status.audio_device_reset"));
 }
 
 void App::_onSelectAudioDevice() {
@@ -750,9 +677,6 @@ void App::_onSelectAudioDevice() {
     _openModal(MODAL_AUDIO_DEV);
 }
 
-// ============================================================
-// 设置
-// ============================================================
 void App::_onSetSpectrumDecay() {
     modal_float_ = settings_.spectrum_decay_rate;
     _openModal(MODAL_SPECTRUM);
@@ -812,9 +736,6 @@ void App::_onShowManual() {
     calib_win_.showManualMenu();
 }
 
-// ============================================================
-// 模态框
-// ============================================================
 void App::_openModal(ModalId id) {
     modal_id_ = id;
     modal_need_open_ = true;
@@ -932,7 +853,7 @@ void App::_drawModalAbout() {
                                 ImGuiWindowFlags_AlwaysAutoResize)) return;
     ImGui::TextColored(ImVec4(1.0f, 0.92f, 0.23f, 1.0f),
                        "FAX Decoder for PC (C++ port)");
-    ImGui::Text("Version  : 1.0.1");
+    ImGui::Text("Version  : 2.0.0");
     ImGui::Text("Author   : MC_blone");
     ImGui::Text("Original : 78-HAM/FAX-Decoder-for-PC");
     ImGui::TextDisabled("https://github.com/78-HAM/FAX-Decoder-for-PC");
@@ -949,7 +870,6 @@ void App::_drawModalUpdate() {
                                 ImGuiWindowFlags_AlwaysAutoResize)) return;
     ImGui::TextUnformatted(modal_text_.c_str());
     if (ImGui::Button("Open browser", ImVec2(140, 0))) {
-        // 用系统默认浏览器打开（Termux 下会失败，但 CI 平台可用）
         std::string cmd;
 #ifdef _WIN32
         cmd = "start \"\" " + update_result_.latest_url;
@@ -958,7 +878,8 @@ void App::_drawModalUpdate() {
 #else
         cmd = "xdg-open \"" + update_result_.latest_url + "\" 2>/dev/null &";
 #endif
-        (void)std::system(cmd.c_str());
+        int res = std::system(cmd.c_str());
+        (void)res;
         modal_id_ = MODAL_NONE;
         ImGui::CloseCurrentPopup();
     }
@@ -1011,7 +932,6 @@ void App::_drawModalAudioDev() {
 }
 
 void App::_drawModalSaveRecord() {
-    // 兜底文件路径输入（无 ImGuiFileDialog 时用）
     if (!ImGui::BeginPopupModal("##text_modal", nullptr,
                                 ImGuiWindowFlags_AlwaysAutoResize)) return;
     ImGui::TextUnformatted("Enter audio file path:");
@@ -1022,9 +942,8 @@ void App::_drawModalSaveRecord() {
             current_file_ = modal_buf_;
             has_file_ = true;
             main_win_.setHasFile(true);
-            // 只取文件名
             std::string name = current_file_;
-            auto slash = name.find_last_of("\\/");
+            auto slash = name.find_last_of("/\\");
             if (slash != std::string::npos) name = name.substr(slash + 1);
             main_win_.setFileName(name);
             setStatus(std::string(i18n_.t("status.loading_file")) + ": " + name);
@@ -1040,11 +959,9 @@ void App::_drawModalSaveRecord() {
     ImGui::EndPopup();
 }
 
-// ============================================================
-// 文件对话框（ImGuiFileDialog）
-// ============================================================
 void App::_drawFileDialog() {
 #ifdef HAVE_IMGUI_FILE_DIALOG
+    if (!file_dialog_open_) return;
     if (IGFD::FileDialog::Instance()->Display("ChooseAudio")) {
         if (IGFD::FileDialog::Instance()->IsOk()) {
             std::string filePathName = IGFD::FileDialog::Instance()->GetFilePathName();
@@ -1052,7 +969,7 @@ void App::_drawFileDialog() {
             has_file_ = true;
             main_win_.setHasFile(true);
             std::string name = current_file_;
-            auto slash = name.find_last_of("\\/");
+            auto slash = name.find_last_of("/\\");
             if (slash != std::string::npos) name = name.substr(slash + 1);
             main_win_.setFileName(name);
             setStatus(std::string(i18n_.t("status.loading_file")) + ": " + name);
