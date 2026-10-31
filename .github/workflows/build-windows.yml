@@ -3,7 +3,7 @@ name: Build Windows
 on:
   push:
     branches:
-      - test-c++
+      - 'test-c++'
   workflow_dispatch:
 
 jobs:
