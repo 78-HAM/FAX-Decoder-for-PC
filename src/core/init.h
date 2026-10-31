@@ -51,6 +51,7 @@ public:
     bool isDecoding()     const { return state_ == State::DECODING; }
     bool isFileDecoding() const { return state_ == State::FILE_DECODING; }
     bool isRecording()    const { return recording_; }
+    bool consumeFullscreenRequest() { if (toggle_fullscreen_) { toggle_fullscreen_ = false; return true; } return false; }
     
     std::string takePendingFontPath() { 
         std::string p = pending_font_path_; 

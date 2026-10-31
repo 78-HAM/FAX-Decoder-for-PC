@@ -20,6 +20,7 @@
 #include <cmath>
 #include <string>
 #include <tuple>
+#include <algorithm>
 
 static void glfw_error_cb(int err, const char* desc) {
     std::fprintf(stderr, "GLFW Error %d: %s\n", err, desc);
@@ -39,8 +40,8 @@ static GLuint createTestTexture(int w, int h) {
     GLuint tex = 0;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data.data());
     return tex;
 }
@@ -65,13 +66,11 @@ static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        
         int alloc_h = std::max(5000, h);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, alloc_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         g_img_tex.w = w;
         g_img_tex.h = alloc_h;
     }
-    
     glBindTexture(GL_TEXTURE_2D, g_img_tex.id);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
@@ -79,11 +78,10 @@ static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
 }
 
 int main(int, char**) {
-    bool is_fullscreen = false;
-    int wx, wy, ww, wh;
     glfwSetErrorCallback(glfw_error_cb);
     if (!glfwInit()) {
-        std::system("pause");
+        int res = std::system("pause");
+        (void)res;
         return 1;
     }
 
@@ -93,7 +91,8 @@ int main(int, char**) {
 
     GLFWwindow* window = glfwCreateWindow(1400, 820, "FAX Decoder 2.0", nullptr, nullptr);
     if (!window) {
-        std::system("pause");
+        int res = std::system("pause");
+        (void)res;
         glfwTerminate();
         return 1;
     }
@@ -105,7 +104,6 @@ int main(int, char**) {
     ImGui::StyleColorsDark();
     ImGuiIO& io = ImGui::GetIO();
 
-    // 字体加载辅助函数
     auto tryLoadFont = [](const char* path, const ImWchar* ranges) -> ImFont* {
         FILE* f = fopen(path, "rb");
         if (f) {
@@ -118,11 +116,9 @@ int main(int, char**) {
 
     auto reloadFonts = [&](const std::string& custom_font_path) -> std::tuple<ImFont*, ImFont*, ImFont*> {
         io.Fonts->Clear();
-        
         ImFont* f_en = tryLoadFont("resources/fonts/Arial.ttf", io.Fonts->GetGlyphRangesCyrillic());
         if (!f_en) f_en = io.Fonts->AddFontDefault();
         
-        // 使用 Common (3500常用字) 既省内存又稳
         ImFont* f_zh = tryLoadFont(custom_font_path.c_str(), io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
         if (!f_zh) f_zh = tryLoadFont("C:/Windows/Fonts/msyh.ttc", io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
         if (!f_zh) f_zh = f_en;
@@ -160,15 +156,17 @@ int main(int, char**) {
         }
     }
 
+    // 记录窗口原始位置用于恢复
+    bool is_fullscreen = false;
+    int wx, wy, ww, wh;
+
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
-        // 安全地在 NewFrame 之前处理字体重载
         std::string pending = app.takePendingFontPath();
         if (!pending.empty()) {
             current_custom_font = pending;
             std::tie(font_en, font_zh, font_jp) = reloadFonts(current_custom_font);
-            // 删除旧纹理，创建新纹理（必须在 NewFrame 之前）
             ImGui_ImplOpenGL3_DestroyFontsTexture();
             ImGui_ImplOpenGL3_CreateFontsTexture();
         }
@@ -189,9 +187,9 @@ int main(int, char**) {
         app.update();
         ImGui::PopFont();
 
-        // 处理全屏请求
-        if (app.toggle_fullscreen_) {
-            app.toggle_fullscreen_ = false;
+        // 处理全屏
+        if (app.consumeFullscreenRequest()) {
+            if (!is_fullscreen) {
                 glfwGetWindowPos(window, &wx, &wy);
                 glfwGetWindowSize(window, &ww, &wh);
                 GLFWmonitor* monitor = glfwGetPrimaryMonitor();
