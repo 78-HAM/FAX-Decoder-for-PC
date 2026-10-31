@@ -39,6 +39,7 @@ public:
 
     void setStatus(const std::string& s) { status_ = s; }
     void setLanguage(const std::string& lang) { language_ = lang; }
+    void setTheme(bool is_light);
     const std::string& language() const { return language_; }
     void setChineseAvailable(bool b) { chinese_available_ = b; }
 
@@ -99,6 +100,7 @@ private:
     MainWindowCallbacks cb_;
     std::string language_ = "en";
     bool chinese_available_ = false;
+    bool is_light_theme_ = false;
     std::string status_ = "Ready";
     bool decoding_ = false;
     bool has_image_ = false;
