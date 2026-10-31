@@ -25,6 +25,7 @@ struct MainWindowCallbacks {
     std::function<void()> onStartSkewCalib, onStartStartPointCalib;
     std::function<void(float)> onSetRpm;
     std::function<void()> onToggleFullscreen;
+    std::function<void()> onResetView;
     std::function<void(bool)> onSetTheme;
     std::function<void()> onShowManual;
     std::function<void(float*, int)> getSpectrum;
@@ -45,6 +46,7 @@ public:
 
     void setDecoding(bool b) { decoding_ = b; }
     void setHasImage(bool b) { has_image_ = b; }
+    void setLineCount(int count, int max) { current_lines_ = count; max_lines_ = max; }
     void setHasFile(bool b)   { has_file_ = b; }
     void setFileName(const std::string& f) { file_name_ = f; }
 
@@ -122,6 +124,8 @@ private:
 
     bool dragging_ = false;
     bool is_fullscreen_ = false;
+    int current_lines_ = 0;
+    int max_lines_ = 5000;
     ImVec2 drag_start_{0, 0};
     float drag_off_x_ = 0.0f, drag_off_y_ = 0.0f;
 };
@@ -273,6 +277,8 @@ private:
 
     bool dragging_ = false;
     bool is_fullscreen_ = false;
+    int current_lines_ = 0;
+    int max_lines_ = 5000;
     ImVec2 drag_start_;
     float  drag_skew_   = 0.0f;
     float  drag_offset_ = 0.0f;

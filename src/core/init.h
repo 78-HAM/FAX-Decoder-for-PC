@@ -169,6 +169,7 @@ private:
     std::atomic<bool> file_decode_stop_{false};
 
     std::mutex line_acc_mutex_;
+    std::mutex dem_mutex_;
     std::mutex line_queue_mutex_;
     std::deque<std::vector<float>> line_queue_;
 

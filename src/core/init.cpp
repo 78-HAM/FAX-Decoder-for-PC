@@ -286,8 +286,10 @@ void App::_checkUpdateResult() {
 void App::pushRawLine(const float* line_data, int sr) {
     if (!line_data) return;
     std::vector<float> demod_out((size_t)settings_.image_width);
-    demod_.demodulateLine(line_data, sr, sr,
-                          settings_.image_width, demod_out.data());
+    {
+        std::lock_guard<std::mutex> lk(dem_mutex_);
+        demod_.demodulateLine(line_data, sr, sr, settings_.image_width, demod_out.data());
+    }
 
     if (image_.currentLines() >= image_.maxLines()) return;
     image_.pushLine(demod_out.data(), settings_.image_width,
@@ -315,6 +317,7 @@ void App::_uploadImageIfDirty() {
     auto snap = image_.snapshot();
     if (snap.empty()) { image_dirty_ = false; return; }
     image_tex_ = texture_uploader_(snap.data(), image_.width(), lines);
+    main_win_.setLineCount(lines, image_.maxLines());
     image_tex_w_ = image_.width();
     image_tex_h_ = lines;
     main_win_.setImageTexture(image_tex_, image_tex_w_, image_tex_h_);
@@ -343,6 +346,7 @@ void App::_bindCallbacks() {
     cb.onShowManual       = [this]() { _onShowManual(); };
     cb.onLoadFont         = [this]() { _onLoadFont(); };
     cb.onToggleFullscreen = [this]() { _onToggleFullscreen(); };
+    cb.onResetView = [this]() { main_win_.resetView(); };
     cb.onSetTheme         = [this](bool l) { _onSetTheme(l); };
     cb.getSpectrum        = [this](float* out, int n) { _updateSpectrumBars(out, n); };
 

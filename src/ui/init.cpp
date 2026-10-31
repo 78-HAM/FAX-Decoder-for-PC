@@ -108,6 +108,8 @@ void MainWindow::draw() {
 
 void MainWindow::setTheme(bool is_light) { is_light_theme_ = is_light; }
 
+void MainWindow::resetView() { view_scale_ = 1.0f; view_offset_x_ = 0.0f; view_offset_y_ = 0.0f; }
+
 void MainWindow::drawMenuBar() {
     if (!ImGui::BeginMainMenuBar()) return;
 
@@ -271,7 +273,7 @@ void MainWindow::drawRightPanel() {
     float btn_w = (ImGui::GetContentRegionAvail().x - 8.0f) / 2.0f;
     ImVec2 btn_sz(btn_w, 60.0f);
 
-    // 根据状态合并 Start / Stop 按钮
+    // 解码 / 停止 切换按钮
     if (decoding_) {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.78f, 0.16f, 0.16f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.56f, 0.00f, 0.00f, 1.0f));
@@ -283,17 +285,34 @@ void MainWindow::drawRightPanel() {
         if (ImGui::Button(t("btn.start"), btn_sz)) { if (cb_.onToggleDecode) cb_.onToggleDecode(); }
         ImGui::PopStyleColor(2);
     }
-    
     ImGui::SameLine();
-
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.94f, 0.42f, 0.00f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.75f, 0.21f, 0.05f, 1.0f));
     if (ImGui::Button(t("btn.clear"), btn_sz)) { if (cb_.onClear) cb_.onClear(); }
     ImGui::PopStyleColor(2);
 
-    ImGui::PopStyleVar();
+    ImGui::Spacing();
+    ImGui::TextDisabled("Lines: %d / %d", current_lines_, max_lines_);
+    ImGui::Spacing();
+
+    // 视图控制按钮
+    float ctrl_btn_w = (ImGui::GetContentRegionAvail().x - 24.0f) / 4.0f;
+    if (ImGui::Button("+", ImVec2(ctrl_btn_w, 30))) view_scale_ *= 1.2f;
+    ImGui::SameLine();
+    if (ImGui::Button("-", ImVec2(ctrl_btn_w, 30))) view_scale_ /= 1.2f;
+    ImGui::SameLine();
+    if (ImGui::Button("全屏", ImVec2(ctrl_btn_w, 30))) {
+        if (cb_.onToggleFullscreen) cb_.onToggleFullscreen();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("重置", ImVec2(ctrl_btn_w, 30))) {
+        if (cb_.onResetView) cb_.onResetView();
+    }
 
     ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
     ImGui::TextUnformatted(t("label.spectrum"));
     drawSpectrum();
 
@@ -301,10 +320,10 @@ void MainWindow::drawRightPanel() {
     ImGui::TextUnformatted(t("label.status"));
     ImGui::TextWrapped("%s", status_.c_str());
 
-    if (has_file_ && !file_name_.empty()) {
         ImGui::Separator();
         ImGui::TextDisabled("File: %s", file_name_.c_str());
     }
+    ImGui::PopStyleVar();
 }
 
 void MainWindow::drawSpectrum() {

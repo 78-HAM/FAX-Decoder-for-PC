@@ -27,16 +27,7 @@ static void glfw_error_cb(int err, const char* desc) {
 }
 
 static GLuint createTestTexture(int w, int h) {
-    std::vector<unsigned char> data(w * h * 4);
-    for (int y = 0; y < h; ++y) {
-        for (int x = 0; x < w; ++x) {
-            int i = (y * w + x) * 4;
-            data[i + 0] = (unsigned char)((x * 255) / w);
-            data[i + 1] = (unsigned char)((y * 255) / h);
-            data[i + 2] = 80;
-            data[i + 3] = 255;
-        }
-    }
+    std::vector<unsigned char> data(w * h * 4, 255);
     GLuint tex = 0;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
@@ -51,16 +42,20 @@ static GlTexture g_img_tex;
 
 static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
     if (!pixels || w <= 0 || h <= 0) return (ImTextureID)0;
+    
+    // 严格按 RGBA 4 字节对齐，避免错位和右侧乱码
     static std::vector<uint8_t> rgba;
     if (rgba.size() < (size_t)w * h * 4) {
         rgba.resize((size_t)w * h * 4);
     }
     for (int i = 0; i < w * h; ++i) {
-        rgba[i * 4 + 0] = pixels[i];
-        rgba[i * 4 + 1] = pixels[i];
-        rgba[i * 4 + 2] = pixels[i];
+        uint8_t v = pixels[i];
+        rgba[i * 4 + 0] = v;
+        rgba[i * 4 + 1] = v;
+        rgba[i * 4 + 2] = v;
         rgba[i * 4 + 3] = 255;
     }
+    
     if (g_img_tex.id == 0 || g_img_tex.w != w || g_img_tex.h < h) {
         if (g_img_tex.id) glDeleteTextures(1, &g_img_tex.id);
         glGenTextures(1, &g_img_tex.id);
@@ -74,31 +69,23 @@ static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
         g_img_tex.w = w;
         g_img_tex.h = alloc_h;
     }
+    
     glBindTexture(GL_TEXTURE_2D, g_img_tex.id);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4); // 强制 4 字节对齐
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
     return (ImTextureID)(intptr_t)g_img_tex.id;
 }
 
 int main(int, char**) {
     glfwSetErrorCallback(glfw_error_cb);
-    if (!glfwInit()) {
-        int res = std::system("pause");
-        (void)res;
-        return 1;
-    }
+    if (!glfwInit()) return 1;
 
     const char* glsl_version = "#version 130";
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
     GLFWwindow* window = glfwCreateWindow(1400, 820, "FAX Decoder 2.0", nullptr, nullptr);
-    if (!window) {
-        int res = std::system("pause");
-        (void)res;
-        glfwTerminate();
-        return 1;
-    }
+    if (!window) { glfwTerminate(); return 1; }
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
 
@@ -148,6 +135,7 @@ int main(int, char**) {
     app.init();
     app.setChineseAvailable(true);
 
+    // 生成测试图像数据
     {
         std::vector<float> demo_line(app.settings().image_width);
         for (int row = 0; row < 200; ++row) {
@@ -155,11 +143,10 @@ int main(int, char**) {
                 float fx = (float)x / (float)demo_line.size();
                 demo_line[x] = (fx * 0.5f) + (std::sin((float)row * 0.05f + fx * 10.0f) * 0.25f + 0.25f);
             }
-            app.pushRawLine(demo_line.data(), 48000);
+            app.pushRawLine(demo_line.data(), 60000); // 传递 60000 采样率
         }
     }
 
-    // 记录窗口原始位置用于恢复
     bool is_fullscreen = false;
     int wx, wy, ww, wh;
 
@@ -179,18 +166,13 @@ int main(int, char**) {
         ImGui::NewFrame();
 
         std::string lang = app.settings().language;
-        if (lang == "zh-cn" || lang == "zh_CN" || lang == "zh-tw" || lang == "zh_TW") {
-            ImGui::PushFont(font_zh);
-        } else if (lang == "jp" || lang == "ja") {
-            ImGui::PushFont(font_jp);
-        } else {
-            ImGui::PushFont(font_en);
-        }
+        if (lang == "zh-cn" || lang == "zh_CN" || lang == "zh-tw" || lang == "zh_TW") ImGui::PushFont(font_zh);
+        else if (lang == "jp" || lang == "ja") ImGui::PushFont(font_jp);
+        else ImGui::PushFont(font_en);
         
         app.update();
         ImGui::PopFont();
 
-        // 处理全屏
         if (app.consumeFullscreenRequest()) {
             if (!is_fullscreen) {
                 glfwGetWindowPos(window, &wx, &wy);
