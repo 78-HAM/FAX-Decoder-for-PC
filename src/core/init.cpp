@@ -323,8 +323,6 @@ void App::_uploadImageIfDirty() {
 
 void App::_bindCallbacks() {
     MainWindowCallbacks cb;
-    cb.onStart            = [this]() { _onStart(); };
-    cb.onStop             = [this]() { _onStop(); };
     cb.onToggleDecode     = [this]() { if (state_ == State::IDLE) _onStart(); else _onStop(); };
     cb.onClear            = [this]() { _onClear(); };
     cb.onExit             = [this]() { _onExit(); };
