@@ -108,7 +108,8 @@ int main(int, char**) {
     ImGui::StyleColorsDark();
 
     ImGuiIO& io = ImGui::GetIO();
-    
+    std::string current_custom_font = "C:/Windows/Fonts/msyh.ttc";
+
     auto tryLoadFont = [](const char* path, const ImWchar* ranges) -> ImFont* {
         FILE* f = fopen(path, "rb");
         if (f) {
@@ -129,8 +130,7 @@ int main(int, char**) {
     ImFont* font_zh = tryLoadFont(current_custom_font.c_str(), io.Fonts->GetGlyphRangesChineseFull());
     if (!font_zh) font_zh = font_en;
     
-    ImFont* font_jp = tryLoadFont("fount/Roboto-Medium.ttf", io.Fonts->GetGlyphRangesJapanese());
-    if (!font_jp) font_jp = tryLoadFont("C:/Windows/Fonts/msgothic.ttc", io.Fonts->GetGlyphRangesJapanese());
+    ImFont* font_jp = tryLoadFont("C:/Windows/Fonts/msgothic.ttc", io.Fonts->GetGlyphRangesJapanese());
     if (!font_jp) font_jp = font_zh;
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
