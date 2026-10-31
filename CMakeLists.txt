@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(fax_decoder LANGUAGES CXX C)
-enable_language(RC)
+if(WIN32)
+    enable_language(RC)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -60,7 +62,11 @@ endif()
 
 # ---------------- App ----------------
 file(GLOB_RECURSE APP_SRC CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/*.cpp)
-add_executable(fax_decoder ${APP_SRC} resources/app.rc)
+if(WIN32)
+    add_executable(fax_decoder ${APP_SRC} resources/app.rc)
+else()
+    add_executable(fax_decoder ${APP_SRC})
+endif()
 
 target_include_directories(fax_decoder PRIVATE
     ${CMAKE_SOURCE_DIR}/src
