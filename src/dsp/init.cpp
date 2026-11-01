@@ -40,8 +40,7 @@ Demodulator::Demodulator() { initWindow(); }
 Demodulator::Demodulator(const Config& cfg) : cfg_(cfg) { initWindow(); }
 
 void Demodulator::initWindow() {
-    // 强制回到 Python 原版的 N=128，无视外部 config 的 256
-    int N = 128;
+    int N = cfg_.window_size;
     cfg_.window_size = N;
     window_.resize(N);
     // Python: 0.54 - 0.46 * np.cos(2.0 * np.pi * np.arange(N) / (N - 1))
@@ -58,7 +57,7 @@ void Demodulator::demodulateLine(const float* buf, int len, int sr,
         return;
     }
 
-    const int N = 128;
+    const int N = cfg_.window_size;
     if (!fft_ || fft_n_ != N) {
         fft_.reset(new FftKiss(N));
         fft_n_ = N;

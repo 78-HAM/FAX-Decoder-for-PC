@@ -21,7 +21,9 @@ struct AppSettings {
     float skew_factor               = 0.0f;
     float global_x_offset           = 0.0f;
     int   selected_audio_device     = -1;
-    int   max_lines                 = 2000; 
+    int   max_lines                 = 2000;
+    int   fft_size                  = 8192;
+    float cpu_update_interval       = 1.0f; 
 };
 
 class SettingsIO {

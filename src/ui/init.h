@@ -20,12 +20,17 @@ struct MainWindowCallbacks {
     std::function<void(const char*)> onSetLanguage;
     std::function<void()> onStartSkewCalib, onStartStartPointCalib;
     std::function<void(float)> onSetRpm;
+    std::function<void(int)> onSetFftSize;
+    std::function<void(float)> onSetCpuInterval;
     std::function<void()> onShowManual;
     std::function<void()> onLoadFont;
     std::function<void()> onResetView;
     std::function<void()> onToggleFullscreen;
     std::function<void(bool)> onSetTheme;
     std::function<void(float*, int)> getSpectrum;
+    std::function<float()> getRpmSec;
+    std::function<int()> getFftSize;
+    std::function<float()> getCpuInterval;
 };
 
 // ============================================================
@@ -40,6 +45,8 @@ public:
     const std::string& language() const { return language_; }
     void setChineseAvailable(bool b) { chinese_available_ = b; }
     void setTheme(bool is_light);
+    void setCpuUsage(float usage) { cpu_usage_ = usage; }
+    float cpu_usage_ = 0.0f;
 
     void setDecoding(bool b) { decoding_ = b; }
     void setHasImage(bool b) { has_image_ = b; }

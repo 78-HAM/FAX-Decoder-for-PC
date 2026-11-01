@@ -136,7 +136,30 @@ void MainWindow::drawMenuBar() {
 
         if (ImGui::BeginMenu(t("menu.settings.rpm"))) {
             struct R { const char* label; float sec; } opts[] = { {"30 RPM", 2.0f}, {"60 RPM", 1.0f}, {"120 RPM", 0.5f}, {"240 RPM", 0.25f}, {"480 RPM", 0.125f} };
-            for (auto& o : opts) { if (ImGui::MenuItem(o.label)) { if (cb_.onSetRpm) cb_.onSetRpm(o.sec); } }
+            for (auto& o : opts) {
+                bool sel = std::abs(cb_.getRpmSec() - o.sec) < 0.001f;
+                if (ImGui::MenuItem(o.label, nullptr, sel)) { if (cb_.onSetRpm) cb_.onSetRpm(o.sec); }
+            }
+            ImGui::EndMenu();
+        }
+        
+        if (ImGui::BeginMenu("FFT Size")) {
+            int sizes[] = { 1024, 2048, 4096, 8192, 16384 };
+            for (int s : sizes) {
+                bool sel = (cb_.getFftSize() == s);
+                char label[16]; std::snprintf(label, sizeof(label), "%d", s);
+                if (ImGui::MenuItem(label, nullptr, sel)) { if (cb_.onSetFftSize) cb_.onSetFftSize(s); }
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("CPU Refresh")) {
+            float intervals[] = { 0.1f, 0.5f, 1.0f, 2.0f, 5.0f, 0.0f };
+            const char* labels[] = { "0.1s", "0.5s", "1.0s", "2.0s", "5.0s", "Off" };
+            for (int i = 0; i < 6; ++i) {
+                bool sel = (std::abs(cb_.getCpuInterval() - intervals[i]) < 0.01f);
+                if (ImGui::MenuItem(labels[i], nullptr, sel)) { if (cb_.onSetCpuInterval) cb_.onSetCpuInterval(intervals[i]); }
+            }
             ImGui::EndMenu();
         }
         
@@ -315,6 +338,23 @@ void MainWindow::drawRightPanel() {
 
     ImGui::TextUnformatted(t("label.spectrum"));
     drawSpectrum();
+    
+    ImGui::Spacing();
+    ImGui::TextUnformatted("CPU Usage");
+    
+    ImVec4 cpu_color;
+    if (cpu_usage_ < 0.5f) {
+        // 绿到黄
+        cpu_color = ImVec4(cpu_usage_ * 2.0f, 1.0f, 0.2f, 1.0f);
+    } else {
+        // 黄到红
+        cpu_color = ImVec4(1.0f, 1.0f - (cpu_usage_ - 0.5f) * 2.0f, 0.2f, 1.0f);
+    }
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, cpu_color);
+    char cpu_text[32];
+    std::snprintf(cpu_text, sizeof(cpu_text), "%.1f%%", cpu_usage_ * 100.0f);
+    ImGui::ProgressBar(cpu_usage_, ImVec2(-1, 22), cpu_text);
+    ImGui::PopStyleColor();
 
     ImGui::Separator();
     ImGui::TextUnformatted(t("label.status"));

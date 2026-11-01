@@ -1,6 +1,7 @@
 #include "core/init.h"
 #include "util/ImageIO.h"
 #include "util/NativeFileDialog.h"
+#include "util/CpuMonitor.h"
 
 #include <unordered_map>
 #include <algorithm>
@@ -102,8 +103,8 @@ void App::init() {
     main_win_.setChineseAvailable(chinese_available_);
 
     image_.init(settings_.image_width, settings_.max_lines);
-    demod_.setConfig({1500.0f, 2300.0f, 128, settings_.contrast});
-    spectrum_.reset(new SpectrumDisplay(2048));
+    demod_.setConfig({1500.0f, 2300.0f, settings_.fft_size, settings_.contrast});
+    spectrum_.reset(new SpectrumDisplay(settings_.fft_size));
 
     rec_win_.setStrings("Recording##rec",
                         "Start Recording", "Stop Recording",
@@ -143,6 +144,19 @@ void App::update() {
     _checkUpdateResult();
 
     spectrum_->updateDecay(settings_.spectrum_decay_rate);
+    
+    // CPU 监控
+    static auto last_cpu_time = std::chrono::steady_clock::now();
+    static CpuMonitor cpu_mon;
+    if (settings_.cpu_update_interval > 0.0f) {
+        auto now = std::chrono::steady_clock::now();
+        float elapsed = std::chrono::duration<float>(now - last_cpu_time).count();
+        if (elapsed >= settings_.cpu_update_interval) {
+            main_win_.setCpuUsage(cpu_mon.getUsage());
+            last_cpu_time = now;
+        }
+    }
+
     _uploadImageIfDirty();
 
     main_win_.draw();
@@ -346,12 +360,17 @@ void App::_bindCallbacks() {
     cb.onStartSkewCalib        = [this]() { _onStartSkewCalib(); };
     cb.onStartStartPointCalib  = [this]() { _onStartStartPointCalib(); };
     cb.onSetRpm           = [this](float s) { _onSetRpm(s); };
+    cb.onSetFftSize       = [this](int s) { settings_.fft_size = s; demod_.setConfig({1500.0f, 2300.0f, s, settings_.contrast}); spectrum_.reset(new SpectrumDisplay(s)); };
+    cb.onSetCpuInterval   = [this](float s) { settings_.cpu_update_interval = s; };
     cb.onShowManual       = [this]() { _onShowManual(); };
     cb.onLoadFont         = [this]() { _onLoadFont(); };
     cb.onToggleFullscreen = [this]() { _onToggleFullscreen(); };
     cb.onResetView        = [this]() { main_win_.resetView(); };
     cb.onSetTheme         = [this](bool l) { _onSetTheme(l); };
     cb.getSpectrum        = [this](float* out, int n) { _updateSpectrumBars(out, n); };
+    cb.getRpmSec          = [this]() { return settings_.seconds_per_line; };
+    cb.getFftSize         = [this]() { return settings_.fft_size; };
+    cb.getCpuInterval     = [this]() { return settings_.cpu_update_interval; };
 
     main_win_.setCallbacks(cb);
 
@@ -851,7 +870,7 @@ void App::_drawModalContrast() {
     if (ImGui::Button("OK", ImVec2(110, 0))) {
         settings_.contrast = std::clamp(modal_float_, 0.10f, 5.00f);
         settings_.is_binary_mode = modal_bool_;
-        demod_.setConfig({1500.0f, 2300.0f, 128, settings_.contrast});
+        demod_.setConfig({1500.0f, 2300.0f, settings_.fft_size, settings_.contrast});
         image_.reprocessAll(settings_.is_binary_mode);
         image_dirty_ = true;
         char buf[80];
