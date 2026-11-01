@@ -47,7 +47,7 @@ static ImTextureID uploadGrayTexture(const uint8_t* pixels, int w, int h) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        int alloc_h = std::max(5000, h);
+        int alloc_h = std::max(2500, h);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, alloc_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         g_img_tex.w = w;
         g_img_tex.h = alloc_h;

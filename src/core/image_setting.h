@@ -22,7 +22,7 @@ struct AppSettings {
     float global_x_offset           = 0.0f;
     int   selected_audio_device     = -1;
     int   max_lines                 = 2000;
-    int   fft_size                  = 8192;
+    int   fft_size                  = 2048;
     float cpu_update_interval       = 1.0f; 
 };
 

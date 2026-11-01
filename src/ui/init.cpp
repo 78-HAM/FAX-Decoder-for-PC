@@ -209,7 +209,7 @@ void MainWindow::drawCanvas() {
     dl->AddRectFilled(p0, ImVec2(p0.x + avail.x, p0.y + avail.y), IM_COL32(0, 0, 0, 255));
 
     if (image_tex_ && image_w_ > 0 && image_h_ > 0) {
-        float calc_h = std::max((float)image_h_, 250.0f);
+        float calc_h = std::max((float)image_h_, 100.0f);
         float base = std::min(avail.x / image_w_, avail.y / calc_h);
         float s = base * view_scale_;
         float w = image_w_ * s;

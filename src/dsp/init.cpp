@@ -71,6 +71,9 @@ void Demodulator::demodulateLine(const float* buf, int len, int sr,
 
     const int nb = fft_->nBins();
     const float samples_per_pixel = (float)len / (float)out_width;
+    // 动态防越界：窗口不能大过每像素跨度的 4 倍，否则左侧会出现大面积黑块
+    int N = std::min(cfg_.window_size, (int)(samples_per_pixel * 4));
+    if (N < 32) N = 32;
     const float bin_hz = (float)sr / (float)N;
 
     int start_bin = std::max(1, (int)(cfg_.f_min / bin_hz) - 2);
